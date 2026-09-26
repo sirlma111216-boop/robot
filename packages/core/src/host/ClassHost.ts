@@ -338,7 +338,7 @@ export class ClassHost {
     const team: Team = {
       id, name, styleIndex, leaderId: null, bot: botLevel ? { level: botLevel, name } : null, members: [],
       build: botLevel ? buildForBot(bots, botLevel) : { ...PRESETS[0].build, utilities: [...PRESETS[0].build.utilities] },
-      buildReady: !!botLevel, suggestions: [], proposals: [], lockedPlan: null, energy: 0, matchScore: 0,
+      buildReady: !!botLevel, suggestions: [], proposals: [], lockedPlan: null, planSource: null, energy: 0, matchScore: 0,
       breakdown: { crown: 0, push: 0, capsule: 0 }, rankPoints: 0, matchResults: [], emote: null,
     };
     st.teams[id] = team; st.teamOrder.push(id);
@@ -443,12 +443,18 @@ export class ClassHost {
     const arena = ARENAS[m.arenaId];
     const plans: Record<string, Plan> = {};
     for (const t of this.allTeams()) {
+      // 우선순위: 팀장 확정 → 팀장의 마지막 배치(자동 제안) → 팀원 최다 득표 제안 → 안전 명령
       let plan: Plan | null = t.lockedPlan;
+      t.planSource = plan ? 'locked' : null;
+      if (!plan && t.leaderId) {
+        const mine = t.proposals.find((q) => q.by === t.leaderId);
+        if (mine && validatePlan(mine.plan, t.build, t.energy).ok) { plan = mine.plan; t.planSource = 'leader'; }
+      }
       if (!plan && t.proposals.length) {
         const best = [...t.proposals].sort((a, b) => b.votes.length - a.votes.length || a.at - b.at)[0];
-        if (validatePlan(best.plan, t.build, t.energy).ok) plan = best.plan;
+        if (validatePlan(best.plan, t.build, t.energy).ok) { plan = best.plan; t.planSource = 'vote'; }
       }
-      if (!plan) plan = [...SAFE_PLAN];
+      if (!plan) { plan = [...SAFE_PLAN]; t.planSource = 'safe'; }
       plans[t.id] = plan;
       t.energy = Math.max(0, t.energy - planCost(plan, t.build));
     }
@@ -516,7 +522,7 @@ export class ClassHost {
         leaderNick: t.bot ? t.bot.name : (t.leaderId ? st.players[t.leaderId]?.nick ?? '?' : '미정'),
         members: t.members.map((id) => ({ id, nick: st.players[id]?.nick ?? '?', connected: !!st.players[id]?.connected })),
         bot: t.bot, build: t.build, buildReady: t.buildReady, energy: t.energy,
-        planLocked: !!t.lockedPlan, proposalCount: t.proposals.length,
+        planLocked: !!t.lockedPlan, proposalCount: t.proposals.length, planSource: t.planSource ?? null,
         matchScore: t.matchScore, breakdown: t.breakdown, rankPoints: t.rankPoints, matchResults: t.matchResults, emote: t.emote,
       };
       if (me && me.teamId === t.id) { v.proposals = t.proposals; v.lockedPlan = t.lockedPlan; v.suggestions = t.suggestions; }

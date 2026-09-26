@@ -66,3 +66,29 @@ describe('ClassHost 대회 흐름', () => {
     expect(restored.viewFor(s1.playerId, now).phase).toBe('PODIUM');
   });
 });
+
+describe('마감 시 명령 출처', () => {
+  it('팀장이 확정하지 않아도 마지막 배치(자동 제안)가 사용되고, 아무것도 없으면 제동', () => {
+    let now = 5_000_000;
+    const host = new ClassHost({ code: 'ZZZ111', now, seed: 9, teacherId: 'teacher' });
+    const s = host.joinStudent('리더', now); if (!s.ok) throw new Error();
+    host.handle('teacher', { t: 'teacher:assignLeader', playerId: s.playerId }, now);
+    host.handle('teacher', { t: 'teacher:addBotTeam', level: 'easy' }, now);
+    host.handle('teacher', { t: 'teacher:setSettings', settings: { matches: 1 } }, now);
+    host.handle('teacher', { t: 'teacher:start' }, now);
+    now = host.nextWakeAt()!; host.tick(now); now = host.nextWakeAt()!; host.tick(now);
+    expect(host.state.phase).toBe('PLAN');
+    const team = host.state.teams[host.state.teamOrder[0]];
+    // 확정 없이 배치만 제안(클라이언트 자동 제안과 동일)
+    expect(host.handle(s.playerId, { t: 'proposePlan', plan: ['FWD', 'FWD', 'FWD'] }, now)).toEqual({ ok: true });
+    now = host.nextWakeAt()!; host.tick(now);
+    expect(host.state.phase).toBe('BATTLE');
+    expect(host.state.match!.revealedPlans[team.id]).toEqual(['FWD', 'FWD', 'FWD']);
+    expect(team.planSource).toBe('leader');
+    // 다음 턴: 아무것도 안 하면 제동
+    now = host.nextWakeAt()!; host.tick(now); expect(host.state.phase).toBe('PLAN');
+    now = host.nextWakeAt()!; host.tick(now);
+    expect(host.state.match!.revealedPlans[team.id]).toEqual(['BRAKE', 'BRAKE', 'BRAKE']);
+    expect(team.planSource).toBe('safe');
+  });
+});

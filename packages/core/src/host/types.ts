@@ -30,6 +30,7 @@ export interface Team {
   suggestions: { by: string; partId: string }[];
   proposals: Proposal[];
   lockedPlan: Plan | null;
+  planSource: 'locked' | 'leader' | 'vote' | 'safe' | null; // 직전 전투에 사용된 명령의 출처
   energy: number;
   matchScore: number;
   breakdown: { crown: number; push: number; capsule: number };
@@ -93,7 +94,7 @@ export interface TeamView {
   members: { id: string; nick: string; connected: boolean }[];
   bot: { level: BotLevel; name: string } | null;
   build: RobotBuild; buildReady: boolean; energy: number;
-  planLocked: boolean; proposalCount: number;
+  planLocked: boolean; proposalCount: number; planSource: Team['planSource'];
   matchScore: number; breakdown: Team['breakdown']; rankPoints: number; matchResults: Team['matchResults'];
   emote: Team['emote'];
   // 내 팀일 때만

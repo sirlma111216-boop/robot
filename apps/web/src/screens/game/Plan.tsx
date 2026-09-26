@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ARENAS, COMMAND_IDS, commandCost, planCost, previewPath, deriveSpec, validatePlan, EMOTES, type CommandId, type Plan as PlanT } from '@scrap/core';
-import { Scene, TopBar, Timer, CommandCard, CommandIcon, TeamBadge, commandLabel } from '../../ui/common';
+import { Scene, TopBar, Timer, CommandCard, CommandIcon, TeamBadge, Speaker, commandLabel } from '../../ui/common';
 import { ArenaView } from '../../ui/ArenaView';
 import { teamInfosFromView } from '../../render/ArenaRenderer';
 import { myTeamOf, type ScreenProps } from './GameFlow';
@@ -15,6 +15,7 @@ export function Plan({ client, view }: ScreenProps) {
   const [slots, setSlots] = useState<Slots>([null, null, null]);
   const [sel, setSel] = useState<number>(0);
   const [emoteOpen, setEmoteOpen] = useState(false);
+  const [tipShown, setTipShown] = useState(() => { try { return localStorage.getItem('sc:tip:plan') !== '1'; } catch { return true; } });
   useEffect(() => { setSlots([null, null, null]); setSel(0); }, [m.turn, m.index]);
   const teams = useMemo(() => teamInfosFromView(view.teams), [view.teams]);
   const myRobot = team ? m.robots.find((r) => r.teamId === team.id) : null;
@@ -40,6 +41,12 @@ export function Plan({ client, view }: ScreenProps) {
   };
   const clearSlot = (i: number) => { if (locked) return; const next = [...slots]; next[i] = null; setSlots(next); setSel(i); };
   const validity = build ? validatePlan(draft, build, energy) : { ok: false as const, reason: '' };
+  // 팀장의 배치는 채워질 때마다 자동으로 서버에 전달된다(확정 전에 마감돼도 이 배치가 사용됨)
+  useEffect(() => {
+    if (!isLeader || locked || !filled || !validity.ok) return;
+    const id = setTimeout(() => client.send({ t: 'proposePlan', plan: draft }), 350);
+    return () => clearTimeout(id);
+  }, [isLeader, locked, filled, validity.ok, JSON.stringify(draft)]);
   const adopt = (p: PlanT) => { setSlots([...p]); };
 
   useEffect(() => {
@@ -95,13 +102,14 @@ export function Plan({ client, view }: ScreenProps) {
                 ) : (
                   <button className="btn teal big block" disabled={!filled || !validity.ok} onClick={() => { client.send({ t: 'proposePlan', plan: draft }); client.toast('팀장에게 제안했어요'); }}>팀장에게 제안하기</button>
                 )}
+                {isLeader && filled && validity.ok && <div className="small" style={{ textAlign: 'center', color: 'var(--teal)' }}>확정을 안 눌러도 마감 때 이 배치로 진행돼요. 확정하면 더 빨리 시작!</div>}
                 <div className="small muted" style={{ textAlign: 'center' }}>키보드: ↑↓←→ 이동 · 스페이스 제동 · F 전면 · Q/W 보조 · Backspace 지우기{isLeader ? ' · Enter 확정' : ''}</div>
               </>
             )}
-            {team.proposals && team.proposals.length > 0 && (
+            {team.proposals && team.proposals.filter((q) => q.by !== view.me!.playerId).length > 0 && (
               <div className="col" style={{ gap: 6 }}>
-                <strong className="small">팀원 제안 ({team.proposals.length})</strong>
-                {team.proposals.map((q) => {
+                <strong className="small">팀원 제안 ({team.proposals.filter((q) => q.by !== view.me!.playerId).length})</strong>
+                {team.proposals.filter((q) => q.by !== view.me!.playerId).map((q) => {
                   const who = team.members.find((mm) => mm.id === q.by)?.nick ?? '?';
                   const voted = q.votes.includes(view.me!.playerId);
                   return (
@@ -132,6 +140,7 @@ export function Plan({ client, view }: ScreenProps) {
           </div>
         )}
       </div>
+      {tipShown && team && m.turn === 1 && <Speaker who="정비사 미라" image="CH-01" text={isLeader ? '카드를 눌러 3칸을 채우고 「명령 확정」을 눌러! 3초씩, 모두 동시에 움직여.' : '카드로 3칸을 채워 팀장에게 제안해 봐. 팀장이 채택하면 우리 팀 명령이 돼.'} style={{ left: 16, bottom: 12 }} onSkip={() => { setTipShown(false); try { localStorage.setItem('sc:tip:plan', '1'); } catch { /* noop */ } }} />}
     </Scene>
   );
 }
