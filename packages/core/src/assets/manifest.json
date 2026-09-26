@@ -1,0 +1,747 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-26T09:53:27.010Z",
+  "images": {
+    "AR-01": {
+      "id": "AR-01",
+      "kind": "arena",
+      "url": "/assets/images/arena/ar-01-1600.webp",
+      "urlLow": "/assets/images/arena/ar-01-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "AR-02": {
+      "id": "AR-02",
+      "kind": "arena",
+      "url": "/assets/images/arena/ar-02-1600.webp",
+      "urlLow": "/assets/images/arena/ar-02-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "AR-03": {
+      "id": "AR-03",
+      "kind": "arena",
+      "url": "/assets/images/arena/ar-03-1600.webp",
+      "urlLow": "/assets/images/arena/ar-03-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-01": {
+      "id": "BG-01",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-01-1600.webp",
+      "urlLow": "/assets/images/bg/bg-01-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-02": {
+      "id": "BG-02",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-02-1600.webp",
+      "urlLow": "/assets/images/bg/bg-02-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-03": {
+      "id": "BG-03",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-03-1600.webp",
+      "urlLow": "/assets/images/bg/bg-03-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-04": {
+      "id": "BG-04",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-04-1600.webp",
+      "urlLow": "/assets/images/bg/bg-04-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-05": {
+      "id": "BG-05",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-05-1600.webp",
+      "urlLow": "/assets/images/bg/bg-05-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-06": {
+      "id": "BG-06",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-06-1600.webp",
+      "urlLow": "/assets/images/bg/bg-06-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-07": {
+      "id": "BG-07",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-07-1600.webp",
+      "urlLow": "/assets/images/bg/bg-07-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "BG-08": {
+      "id": "BG-08",
+      "kind": "bg",
+      "url": "/assets/images/bg/bg-08-1600.webp",
+      "urlLow": "/assets/images/bg/bg-08-1024.webp",
+      "w": 1600,
+      "h": 900,
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    "CH-01": {
+      "id": "CH-01",
+      "kind": "char",
+      "url": "/assets/images/chars/ch-01.webp",
+      "w": 431,
+      "h": 560,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          177,
+          17,
+          951,
+          1237
+        ]
+      }
+    },
+    "CH-02": {
+      "id": "CH-02",
+      "kind": "char",
+      "url": "/assets/images/chars/ch-02.webp",
+      "w": 560,
+      "h": 416,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          30,
+          114,
+          1194,
+          886
+        ]
+      }
+    },
+    "CH-03": {
+      "id": "CH-03",
+      "kind": "char",
+      "url": "/assets/images/chars/ch-03.webp",
+      "w": 372,
+      "h": 560,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          239,
+          12,
+          825,
+          1242
+        ]
+      }
+    },
+    "DR-01": {
+      "id": "DR-01",
+      "kind": "drive",
+      "url": "/assets/images/parts/dr-01.webp",
+      "w": 138,
+      "h": 256,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 887,
+        "h": 1774,
+        "trim": [
+          141,
+          339,
+          606,
+          1121
+        ]
+      }
+    },
+    "DR-02": {
+      "id": "DR-02",
+      "kind": "drive",
+      "url": "/assets/images/parts/dr-02.webp",
+      "w": 155,
+      "h": 256,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 887,
+        "h": 1774,
+        "trim": [
+          48,
+          234,
+          796,
+          1315
+        ]
+      }
+    },
+    "DR-03": {
+      "id": "DR-03",
+      "kind": "drive",
+      "url": "/assets/images/parts/dr-03.webp",
+      "w": 114,
+      "h": 256,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 887,
+        "h": 1774,
+        "trim": [
+          175,
+          283,
+          523,
+          1173
+        ]
+      }
+    },
+    "FX-01": {
+      "id": "FX-01",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-01.webp",
+      "w": 384,
+      "h": 378,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          329,
+          291,
+          725,
+          714
+        ]
+      }
+    },
+    "FX-02": {
+      "id": "FX-02",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-02.webp",
+      "w": 256,
+      "h": 120,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          174,
+          417,
+          1028,
+          480
+        ]
+      }
+    },
+    "FX-03": {
+      "id": "FX-03",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-03.webp",
+      "w": 384,
+      "h": 375,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          109,
+          108,
+          1036,
+          1011
+        ]
+      }
+    },
+    "FX-04": {
+      "id": "FX-04",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-04.webp",
+      "w": 384,
+      "h": 296,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          107,
+          236,
+          1091,
+          840
+        ]
+      }
+    },
+    "FX-05": {
+      "id": "FX-05",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-05.webp",
+      "w": 116,
+      "h": 320,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          448,
+          126,
+          354,
+          978
+        ]
+      }
+    },
+    "FX-06": {
+      "id": "FX-06",
+      "kind": "fx",
+      "url": "/assets/images/fx/fx-06.webp",
+      "w": 208,
+      "h": 256,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          315,
+          228,
+          622,
+          767
+        ]
+      }
+    },
+    "MD-01": {
+      "id": "MD-01",
+      "kind": "front",
+      "url": "/assets/images/parts/md-01.webp",
+      "w": 256,
+      "h": 182,
+      "pivot": [
+        0.5,
+        0.97
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          50,
+          215,
+          1154,
+          822
+        ]
+      }
+    },
+    "MD-02": {
+      "id": "MD-02",
+      "kind": "front",
+      "url": "/assets/images/parts/md-02.webp",
+      "w": 256,
+      "h": 156,
+      "pivot": [
+        0.5,
+        0.97
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          55,
+          283,
+          1151,
+          701
+        ]
+      }
+    },
+    "MD-03": {
+      "id": "MD-03",
+      "kind": "front",
+      "url": "/assets/images/parts/md-03.webp",
+      "w": 249,
+      "h": 256,
+      "pivot": [
+        0.5,
+        0.97
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          167,
+          145,
+          919,
+          944
+        ]
+      }
+    },
+    "MD-04": {
+      "id": "MD-04",
+      "kind": "utility",
+      "url": "/assets/images/parts/md-04.webp",
+      "w": 200,
+      "h": 149,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          77,
+          247,
+          1102,
+          820
+        ]
+      }
+    },
+    "MD-05": {
+      "id": "MD-05",
+      "kind": "utility",
+      "url": "/assets/images/parts/md-05.webp",
+      "w": 116,
+      "h": 200,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          329,
+          110,
+          596,
+          1031
+        ]
+      }
+    },
+    "MD-06": {
+      "id": "MD-06",
+      "kind": "utility",
+      "url": "/assets/images/parts/md-06.webp",
+      "w": 190,
+      "h": 200,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          179,
+          169,
+          897,
+          943
+        ]
+      }
+    },
+    "MD-07": {
+      "id": "MD-07",
+      "kind": "utility",
+      "url": "/assets/images/parts/md-07.webp",
+      "w": 200,
+      "h": 153,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          94,
+          241,
+          1066,
+          816
+        ]
+      }
+    },
+    "PR-01": {
+      "id": "PR-01",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-01.webp",
+      "w": 512,
+      "h": 119,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1774,
+        "h": 887,
+        "trim": [
+          143,
+          268,
+          1488,
+          347
+        ]
+      }
+    },
+    "PR-02": {
+      "id": "PR-02",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-02.webp",
+      "w": 384,
+      "h": 364,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          141,
+          154,
+          972,
+          922
+        ]
+      }
+    },
+    "PR-03": {
+      "id": "PR-03",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-03.webp",
+      "w": 512,
+      "h": 156,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1774,
+        "h": 887,
+        "trim": [
+          104,
+          203,
+          1566,
+          476
+        ]
+      }
+    },
+    "PR-04": {
+      "id": "PR-04",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-04.webp",
+      "w": 176,
+      "h": 192,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          198,
+          142,
+          856,
+          934
+        ]
+      }
+    },
+    "PR-05": {
+      "id": "PR-05",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-05.webp",
+      "w": 128,
+      "h": 119,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          142,
+          170,
+          968,
+          898
+        ]
+      }
+    },
+    "PR-06": {
+      "id": "PR-06",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-06.webp",
+      "w": 256,
+      "h": 254,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          145,
+          145,
+          964,
+          955
+        ]
+      }
+    },
+    "PR-07": {
+      "id": "PR-07",
+      "kind": "prop",
+      "url": "/assets/images/props/pr-07.webp",
+      "w": 384,
+      "h": 373,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          91,
+          87,
+          1072,
+          1040
+        ]
+      }
+    },
+    "RB-01": {
+      "id": "RB-01",
+      "kind": "chassis",
+      "url": "/assets/images/parts/rb-01.webp",
+      "w": 275,
+      "h": 320,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          326,
+          276,
+          602,
+          701
+        ]
+      }
+    },
+    "RB-02": {
+      "id": "RB-02",
+      "kind": "chassis",
+      "url": "/assets/images/parts/rb-02.webp",
+      "w": 320,
+      "h": 308,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          240,
+          256,
+          774,
+          744
+        ]
+      }
+    },
+    "RB-03": {
+      "id": "RB-03",
+      "kind": "chassis",
+      "url": "/assets/images/parts/rb-03.webp",
+      "w": 320,
+      "h": 290,
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "source": {
+        "w": 1254,
+        "h": 1254,
+        "trim": [
+          192,
+          246,
+          870,
+          789
+        ]
+      }
+    }
+  }
+}

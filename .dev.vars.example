@@ -1,0 +1,2 @@
+# 로컬 개발용 비밀값. 배포 환경에서는 `npx wrangler secret put TEACHER_PASSWORD` 로 설정한다.
+TEACHER_PASSWORD=change-me-Abc123

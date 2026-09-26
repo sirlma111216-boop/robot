@@ -1,0 +1,27 @@
+{
+  "name": "scrap-crown",
+  "private": true,
+  "version": "0.1.0",
+  "description": "스크랩 크라운 — 고철 도시 챔피언십. 학급용 팀 대항 고철 로봇 조립·명령·충돌 웹게임",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "assets": "node scripts/build-assets.mjs",
+    "dev": "npm run build -w @scrap/web && wrangler dev",
+    "dev:web": "npm run dev -w @scrap/web",
+    "build": "npm run build -w @scrap/web",
+    "typecheck": "tsc -b packages/core apps/web apps/worker",
+    "test": "vitest run",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:staging": "npm run build && wrangler deploy --env staging"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260926.1",
+    "sharp": "^0.35.4",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.141.0"
+  }
+}
