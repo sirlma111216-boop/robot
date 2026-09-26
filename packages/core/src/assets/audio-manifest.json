@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "note": "오디오는 아직 제작되지 않았다. 파일이 공급되면 url 을 채운다. url 이 null 이면 클라이언트는 무음으로 동작한다.",
+  "buses": { "bgm": { "gain": 0.6 }, "sfx": { "gain": 0.9 }, "ui": { "gain": 0.8 } },
+  "sounds": {
+    "BGM-CITY": { "bus": "bgm", "url": null, "gain": 1, "loop": true },
+    "BGM-BATTLE": { "bus": "bgm", "url": null, "gain": 1, "loop": true },
+    "SFX-HIT": { "bus": "sfx", "url": null, "gain": 1, "variants": 3, "concurrencyLimit": 4, "cooldownMs": 60, "priority": 2 },
+    "SFX-BUMPER": { "bus": "sfx", "url": null, "gain": 1, "concurrencyLimit": 2, "cooldownMs": 100, "priority": 3 },
+    "SFX-MAGNET": { "bus": "sfx", "url": null, "gain": 0.8, "loop": true, "priority": 1 },
+    "SFX-BOOST": { "bus": "sfx", "url": null, "gain": 1, "priority": 2 },
+    "SFX-FALL": { "bus": "sfx", "url": null, "gain": 1, "priority": 3 },
+    "SFX-PICKUP": { "bus": "sfx", "url": null, "gain": 0.9, "priority": 2 },
+    "SFX-CROWN": { "bus": "sfx", "url": null, "gain": 1, "priority": 3 },
+    "UI-CLICK": { "bus": "ui", "url": null, "gain": 0.7, "cooldownMs": 30 },
+    "UI-LOCK": { "bus": "ui", "url": null, "gain": 0.8 },
+    "UI-TIMER": { "bus": "ui", "url": null, "gain": 0.8, "cooldownMs": 900 }
+  }
+}
