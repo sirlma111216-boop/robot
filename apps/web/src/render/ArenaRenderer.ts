@@ -37,6 +37,11 @@ export class ArenaRenderer {
   private lastPos = new Map<string, { x: number; y: number; t: number }>();
   private dustTimer = new Map<string, number>();
   private shake = 0;
+  private skidding = new Set<string>();
+  private marks: { x: number; y: number; a: number; life: number }[] = [];
+  private squash = new Map<string, { t: number; nx: number; ny: number; amt: number }>();
+  private lag = 0; // 히트스톱으로 밀린 표시 시간(곧 따라잡는다 — 서버 시계는 멈추지 않음)
+  private freezeLeft = 0;
   private lastFrameTime = performance.now();
   reduceFx = false;
   myTeamId: string | null = null;
@@ -63,6 +68,7 @@ export class ArenaRenderer {
     this.segment = segment; this.startAt = startAt; this.serverNow = serverNow; this.hooks = hooks;
     this.eventCursor = 0; this.slotFired = -1; this.ended = false; this.fx = []; this.fallen.clear(); this.magnetOn.clear(); this.flame.clear(); this.bumper.clear(); this.lastPos.clear(); this.dustTimer.clear();
     this.preview = null;
+    this.skidding.clear(); this.marks = []; this.squash.clear(); this.lag = 0; this.freezeLeft = 0;
   }
 
   destroy() { cancelAnimationFrame(this.raf); this.resizeObs?.disconnect(); }
@@ -176,7 +182,9 @@ export class ArenaRenderer {
   // ---------- 재생 ----------
   private drawPlayback(dt: number, timeSec: number) {
     const seg = this.segment!;
-    const t = Math.max(0, this.currentT());
+    // 국소 히트스톱: 표시 시간만 잠깐 멈췄다가 빠르게 따라잡는다
+    if (this.freezeLeft > 0) { this.freezeLeft -= dt; this.lag = Math.min(0.25, this.lag + dt); } else if (this.lag > 0) this.lag = Math.max(0, this.lag - dt * 0.8);
+    const t = Math.max(0, this.currentT() - this.lag);
     const tc = Math.min(t, seg.duration);
     // 이벤트 처리
     while (this.eventCursor < seg.events.length && seg.events[this.eventCursor].t <= tc) this.handleEvent(seg.events[this.eventCursor++], t);
@@ -213,6 +221,16 @@ export class ArenaRenderer {
       }
       this.ctx.save(); this.ctx.strokeStyle = 'rgba(47,215,200,0.35)'; this.ctx.lineWidth = 3; this.ctx.beginPath(); this.ctx.moveTo(me.x, me.y); this.ctx.arc(me.x, me.y, 320, me.a - Math.PI / 2 - 0.96, me.a - Math.PI / 2 + 0.96); this.ctx.closePath(); this.ctx.stroke(); this.ctx.restore();
     }
+    // 스키드 자국(접지를 잃고 미끄러진 궤적)
+    if (this.marks.length) {
+      const ctx = this.ctx; const keepM: typeof this.marks = [];
+      for (const mk of this.marks) {
+        mk.life -= dt; if (mk.life <= 0) continue; keepM.push(mk);
+        ctx.save(); ctx.translate(mk.x, mk.y); ctx.rotate(mk.a); ctx.globalAlpha = Math.min(0.32, mk.life * 0.16); ctx.fillStyle = '#0a0d14';
+        ctx.fillRect(-40, -5, 9, 10); ctx.fillRect(31, -5, 9, 10); ctx.restore();
+      }
+      this.marks = keepM;
+    }
     // 로봇
     positions.sort((a, b) => a.y - b.y);
     for (const p of positions) {
@@ -224,15 +242,25 @@ export class ArenaRenderer {
       if (last && t > last.t) speed = Math.hypot(p.x - last.x, p.y - last.y) / Math.max(1e-3, t - last.t);
       this.lastPos.set(p.id, { x: p.x, y: p.y, t });
       // 먼지
-      if (!this.reduceFx && speed > 70 && fell === undefined) {
+      const skid = this.skidding.has(p.id) && fell === undefined;
+      if (skid && speed > 25 && this.marks.length < 600) this.marks.push({ x: p.x, y: p.y, a: p.a, life: 3 });
+      if (!this.reduceFx && (speed > 70 || (skid && speed > 30)) && fell === undefined) {
         const dl = (this.dustTimer.get(p.id) ?? 0) - dt;
-        if (dl <= 0) { this.dustTimer.set(p.id, 0.11); const bx = p.x - Math.sin(p.a) * 30, by = p.y + Math.cos(p.a) * 30; this.fx.push({ kind: 'dust', x: bx + (Math.random() - 0.5) * 20, y: by + (Math.random() - 0.5) * 10, rot: p.a + Math.PI, scale: 0.35 + Math.random() * 0.2, life: 0.55, max: 0.55, vx: -Math.sin(p.a) * 20, vy: Math.cos(p.a) * 20 }); } else this.dustTimer.set(p.id, dl);
+        if (dl <= 0) { this.dustTimer.set(p.id, skid ? 0.045 : 0.11); const bx = p.x - Math.sin(p.a) * 30, by = p.y + Math.cos(p.a) * 30; this.fx.push({ kind: 'dust', x: bx + (Math.random() - 0.5) * 20, y: by + (Math.random() - 0.5) * 10, rot: p.a + Math.PI, scale: 0.35 + Math.random() * 0.2, life: 0.55, max: 0.55, vx: -Math.sin(p.a) * 20, vy: Math.cos(p.a) * 20 }); } else this.dustTimer.set(p.id, dl);
       }
       const bc = this.bumper.get(p.id); let compress = 0;
       if (bc !== undefined) { const k3 = (t - bc) / 0.35; compress = k3 < 1 ? Math.sin(k3 * Math.PI) : 0; if (k3 >= 1) this.bumper.delete(p.id); }
       const fl = this.flame.get(p.id);
       if (fl !== undefined && t - fl < 0.7) { const img = getImage('FX-05'); if (img) { const ctx = this.ctx; ctx.save(); ctx.translate(p.x - Math.sin(p.a) * 52, p.y + Math.cos(p.a) * 52); ctx.rotate(p.a); ctx.globalAlpha = 0.9 * (1 - (t - fl) / 0.7); const s = 0.9 + Math.random() * 0.2; ctx.drawImage(img, -22 * s, -10, 44 * s, 120 * s); ctx.restore(); } } else this.flame.delete(p.id);
-      this.drawRobotAt(p.id, p.x, p.y, p.a, { alpha, scale, wheelPhase: speed > 5 ? t * speed * 0.5 : 0, bumperCompress: compress });
+      // 충돌 방향으로 순간 찌그러졌다 돌아오는 표현(판정과 무관한 시각 효과)
+      const sq = this.squash.get(p.id); let sqk = 0;
+      if (sq) { const k4 = (t - sq.t) / 0.26; if (k4 >= 1 || k4 < 0) this.squash.delete(p.id); else sqk = Math.sin(k4 * Math.PI) * sq.amt; }
+      if (sqk > 0.005 && sq) {
+        const ang = Math.atan2(sq.ny, sq.nx); const c2 = this.ctx;
+        c2.save(); c2.translate(p.x, p.y); c2.rotate(ang); c2.scale(1 - sqk, 1 + sqk * 0.55); c2.rotate(-ang); c2.translate(-p.x, -p.y);
+        this.drawRobotAt(p.id, p.x, p.y, p.a, { alpha, scale, wheelPhase: speed > 5 ? t * speed * 0.5 : 0, bumperCompress: compress });
+        c2.restore();
+      } else this.drawRobotAt(p.id, p.x, p.y, p.a, { alpha, scale, wheelPhase: speed > 5 && !skid ? t * speed * 0.5 : 0, bumperCompress: compress });
     }
   }
 
@@ -249,13 +277,27 @@ export class ArenaRenderer {
     const teamName = (id: string) => this.teams.get(id)?.name ?? id;
     switch (e.type) {
       case 'hit': {
-        const s = Math.min(1.6, 0.5 + e.impulse / 25000);
-        this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.random() * Math.PI * 2, scale: s, life: 0.35, max: 0.35 });
-        if (e.impulse > 14000) this.shake = Math.max(this.shake, Math.min(14, e.impulse / 3000));
+        // 연출 세기는 서버가 계산한 충격량에 비례
+        const k = Math.min(1, e.impulse / 18000);
+        const base = Math.atan2(e.ny, e.nx);
+        this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: base + Math.PI / 2 + (Math.random() - 0.5), scale: 0.45 + k * 0.75, life: 0.42, max: 0.42 });
+        if (e.impulse > 5000) {
+          this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: base - Math.PI / 2 + (Math.random() - 0.5), scale: 0.35 + k * 0.55, life: 0.36, max: 0.36 });
+          this.fx.push({ kind: 'ring', x: e.x, y: e.y, rot: 0, scale: 0.2 + k * 0.5, life: 0.32, max: 0.32 });
+          const amt = 0.08 + k * 0.2;
+          this.squash.set(e.a, { t, nx: e.nx, ny: e.ny, amt }); this.squash.set(e.b, { t, nx: e.nx, ny: e.ny, amt });
+          if (!this.reduceFx) { this.freezeLeft = Math.max(this.freezeLeft, 0.03 + k * 0.06); this.shake = Math.max(this.shake, 4 + k * 12); }
+        }
         break;
       }
-      case 'wall': this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.random() * Math.PI * 2, scale: 0.6, life: 0.25, max: 0.25 }); break;
-      case 'bumper': this.bumper.set(e.id, t); this.fx.push({ kind: 'ring', x: e.x, y: e.y, rot: 0, scale: 0.3, life: 0.45, max: 0.45 }); this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.random() * Math.PI * 2, scale: 1.4, life: 0.4, max: 0.4 }); this.shake = Math.max(this.shake, 10); break;
+      case 'skid': if (e.on) this.skidding.add(e.id); else this.skidding.delete(e.id); break;
+      case 'wall': {
+        const k = Math.min(1, e.impulse / 20000);
+        this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.atan2(e.ny, e.nx) + (Math.random() - 0.5), scale: 0.5 + k, life: 0.3, max: 0.3 });
+        if (e.impulse > 6000) { this.squash.set(e.id, { t, nx: e.nx, ny: e.ny, amt: 0.06 + k * 0.16 }); if (!this.reduceFx) this.shake = Math.max(this.shake, 3 + k * 7); }
+        break;
+      }
+      case 'bumper': this.bumper.set(e.id, t); if (!this.reduceFx) this.freezeLeft = Math.max(this.freezeLeft, 0.1); this.fx.push({ kind: 'ring', x: e.x, y: e.y, rot: 0, scale: 0.3, life: 0.45, max: 0.45 }); this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.random() * Math.PI * 2, scale: 1.4, life: 0.4, max: 0.4 }); this.shake = Math.max(this.shake, 10); break;
       case 'magnet': if (e.on) this.magnetOn.add(e.id); else this.magnetOn.delete(e.id); break;
       case 'boost': this.flame.set(e.id, t); break;
       case 'brake': break;

@@ -27,8 +27,9 @@ export interface SegmentInput {
 
 export type SimEvent =
   | { t: number; type: 'slot'; index: number }
-  | { t: number; type: 'hit'; a: string; b: string; x: number; y: number; impulse: number }
-  | { t: number; type: 'wall'; id: string; x: number; y: number; impulse: number }
+  | { t: number; type: 'hit'; a: string; b: string; x: number; y: number; impulse: number; nx: number; ny: number }
+  | { t: number; type: 'skid'; id: string; on: boolean }
+  | { t: number; type: 'wall'; id: string; x: number; y: number; impulse: number; nx: number; ny: number }
   | { t: number; type: 'bumper'; id: string; target: string; x: number; y: number }
   | { t: number; type: 'magnet'; id: string; on: boolean }
   | { t: number; type: 'boost'; id: string }
@@ -61,9 +62,20 @@ const BRAKE_DECEL = 900;
 const LATERAL_K = 5.5; // 횡방향 미끄럼 감쇠 (×lateralGrip)
 const ANG_DAMP = 3.0;
 const MAX_ANG_VEL = 4.2;
-const RESTITUTION_ROBOT = 0.32;
-const RESTITUTION_WALL = 0.36;
-const J_BUMPER = 30000;
+const MAX_ANG_VEL_SKID = 10;
+// 탄성: 로봇끼리는 고무 범퍼 수준, 완충벽(PR-01)은 고무 끝단이라 더 잘 튕긴다
+const RESTITUTION_ROBOT = 0.75;
+const RESTITUTION_WALL = 0.5;
+const RESTITUTION_BARRIER = 0.78;
+const CORNER_TORQUE = 0.5; // 각진 차체: 면 중앙이 아닌 모서리 쪽을 맞으면 법선 충격량이 회전도 만든다
+const CONTACT_FRICTION = 0.45; // 빗맞을 때 접선 마찰 충격량 한계(μ·Jn) → 스핀
+// 접지 상실(스키드): 큰 충격을 받으면 타이어가 미끄러져 받은 운동량대로 밀려난다
+const SKID_DV_MIN = 40; // 이 속도 변화 이상이면 접지 상실
+const SKID_DECEL = 70; // 미끄럼 마찰 감속(등방)
+const SKID_EXIT_SPEED = 50; // 이 속도 아래로 떨어지면 접지 회복
+const SKID_MAX_SEC = 2.2;
+// 용수철 범퍼: 저장한 탄성 에너지를 방출. 작용·반작용으로 양쪽에 같은 크기의 충격량
+const J_BUMPER = 24000;
 const MAGNET_RANGE = 320;
 const MAGNET_CONE = (55 * Math.PI) / 180;
 const MAGNET_K = 3.0e6;
@@ -83,6 +95,14 @@ const fwdY = (a: number) => -Math.cos(a);
 const inRect = (x: number, y: number, r: Rect) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(y - r.y) <= r.h / 2;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
+/** 차체를 정사각형으로 근사했을 때, 접촉 방향(cx,cy)에 가장 가까운 면의 바깥 법선 */
+function faceNormal(angle: number, cx: number, cy: number): [number, number] {
+  const fx = Math.sin(angle), fy = -Math.cos(angle); // 앞
+  const rx = -fy, ry = fx; // 오른쪽
+  const df = cx * fx + cy * fy, dr = cx * rx + cy * ry;
+  if (Math.abs(df) >= Math.abs(dr)) return df >= 0 ? [fx, fy] : [-fx, -fy];
+  return dr >= 0 ? [rx, ry] : [-rx, -ry];
+}
 
 interface Live extends RobotSimState {
   cmd: CommandId;
@@ -96,16 +116,18 @@ interface Live extends RobotSimState {
   lastHitBy: string | null;
   lastHitAt: number;
   score: number;
+  skid: number; // 남은 최소 미끄럼 시간
+  skidTotal: number; // 이번 미끄럼 누적 시간
+  skidding: boolean;
 }
 
 export function runSegment(input: SegmentInput): SegmentResult {
   const { arena, plans } = input;
-  const rand = mulberry32(input.seed);
   const events: SimEvent[] = [];
   const frames: Keyframe[] = [];
   const robots: Live[] = input.robots.map((r) => ({
     ...r, cmd: 'WAIT', targetAngle: r.angle, bumperArmed: false, bumperUsed: false, magnetOn: false, plowRam: false,
-    brakeUtil: false, braking: false, lastHitBy: null, lastHitAt: -99, score: 0,
+    brakeUtil: false, braking: false, lastHitBy: null, lastHitAt: -99, score: 0, skid: 0, skidTotal: 0, skidding: false,
   }));
   const capsules: CapsuleState[] = input.capsules.map((c) => ({ ...c }));
   const bodies = [
@@ -126,6 +148,16 @@ export function runSegment(input: SegmentInput): SegmentResult {
   const addScore = (r: Live, delta: number, reason: 'crown' | 'push' | 'capsule', t: number) => {
     r.score += delta;
     events.push({ t: r3(t), type: 'score', id: r.id, delta, reason });
+  };
+
+  /** 충격으로 받은 속도 변화(dv)에 비례해 접지를 잃는다. braced: 스스로 대비한 쪽(범퍼 발사·플라우 정면)은 거의 미끄러지지 않는다. */
+  const knock = (r: Live, dv: number, t: number, braced = false) => {
+    if (dv < SKID_DV_MIN) return;
+    let dur = 0.3 + dv / 300;
+    dur *= r.spec.armorMul * (r.spec.stabilize ? 0.6 : 1) * (r.brakeUtil ? 0.35 : 1) * (r.braking ? 0.7 : 1) * (braced ? 0.25 : 1);
+    if (dur < 0.12) return;
+    r.skid = Math.max(r.skid, Math.min(1.4, dur));
+    if (!r.skidding) { r.skidding = true; r.skidTotal = 0; events.push({ t: r3(t), type: 'skid', id: r.id, on: true }); }
   };
 
   const framesPerSlot = SLOT_SECONDS * PHYSICS_HZ;
@@ -177,8 +209,19 @@ export function runSegment(input: SegmentInput): SegmentResult {
         if (r.cmd === 'FWD' || boostSlot) drive = 1;
         else if (r.cmd === 'BACK') drive = -0.7;
         if (r.plowRam) drive = 1.6;
+        // 접지 상실 상태 갱신
+        if (r.skidding) {
+          r.skid -= DT; r.skidTotal += DT;
+          const sp0 = Math.hypot(r.vx, r.vy);
+          if ((r.skid <= 0 && sp0 < SKID_EXIT_SPEED) || r.skidTotal > SKID_MAX_SEC) {
+            r.skidding = false; r.skid = 0;
+            if (r.cmd !== 'LEFT' && r.cmd !== 'RIGHT') r.targetAngle = r.angle; // 돌아간 방향 그대로 다시 접지
+            events.push({ t: r3(t), type: 'skid', id: r.id, on: false });
+          }
+        }
+        const sk = r.skidding;
         if (drive !== 0) {
-          let acc = Math.min(r.spec.engineForce / r.spec.mass, A_MAX_GRIP * r.spec.grip * gripMul);
+          let acc = Math.min(r.spec.engineForce / r.spec.mass, A_MAX_GRIP * r.spec.grip * gripMul) * (sk ? 0.2 : 1);
           const vAlong = (r.vx * fx + r.vy * fy) * Math.sign(drive);
           const vmax = V_ENGINE_MAX * Math.min(1.6, Math.abs(drive));
           acc *= drive * Math.max(0, 1 - vAlong / vmax);
@@ -187,22 +230,34 @@ export function runSegment(input: SegmentInput): SegmentResult {
         // 회전 (PD, 토크 한계)
         const err = r.targetAngle - r.angle;
         const maxAngAcc = 7.5 * r.spec.turnRate;
-        let angAcc = 26 * err - 9 * r.w;
-        angAcc = Math.max(-maxAngAcc, Math.min(maxAngAcc, angAcc));
-        r.w += angAcc * DT;
-        r.w *= Math.max(0, 1 - ANG_DAMP * DT * 0.35);
-        r.w = Math.max(-MAX_ANG_VEL, Math.min(MAX_ANG_VEL, r.w));
+        if (sk) {
+          // 미끄러지는 동안은 조향이 듣지 않고 받은 스핀이 서서히 줄어든다
+          r.w *= Math.max(0, 1 - 1.1 * DT);
+          r.w = Math.max(-MAX_ANG_VEL_SKID, Math.min(MAX_ANG_VEL_SKID, r.w));
+        } else {
+          let angAcc = 26 * err - 9 * r.w;
+          angAcc = Math.max(-maxAngAcc, Math.min(maxAngAcc, angAcc));
+          r.w += angAcc * DT;
+          r.w *= Math.max(0, 1 - ANG_DAMP * DT * 0.35);
+          r.w = Math.max(-MAX_ANG_VEL, Math.min(MAX_ANG_VEL, r.w));
+        }
         // 접지: 종/횡 분해
         const vLong = r.vx * fx + r.vy * fy;
         const lx = -fy, ly = fx; // 좌측 벡터
         let vLat = r.vx * lx + r.vy * ly;
         const latK = LATERAL_K * r.spec.lateralGrip * latMul * (r.brakeUtil ? 3 : 1);
-        vLat *= Math.max(0, 1 - latK * DT);
+        if (!sk) vLat *= Math.max(0, 1 - latK * DT);
         let vL = vLong;
         let decel = ROLLING * rollMul;
         if (r.braking) decel += BRAKE_DECEL * gripMul;
         if (r.brakeUtil) decel += BRAKE_DECEL * 1.6 * gripMul;
-        if (drive === 0 || r.braking) {
+        if (sk) {
+          // 등방 미끄럼 마찰: 방향과 무관하게 속력만 줄인다 (제동·브레이크는 더 빨리 멈춘다)
+          const sp = Math.hypot(vL, vLat);
+          const dd = (SKID_DECEL * rollMul + (r.braking ? 160 : 0) + (r.brakeUtil ? 320 : 0)) * DT;
+          const kk = sp <= dd ? 0 : (sp - dd) / sp;
+          vL *= kk; vLat *= kk;
+        } else if (drive === 0 || r.braking) {
           const d = decel * DT;
           if (Math.abs(vL) <= d) vL = 0; else vL -= Math.sign(vL) * d;
         } else if (Math.abs(vL) > V_ENGINE_MAX * 1.7) {
@@ -277,39 +332,55 @@ export function runSegment(input: SegmentInput): SegmentResult {
           const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
           const vn = rvx * nx + rvy * ny;
           if (vn > 0) continue; // 이미 분리 중
-          let j0 = (-(1 + RESTITUTION_ROBOT) * vn) / (1 / ma + 1 / mb);
           // 정면 판정
           const aFront = fwdX(a.angle) * nx + fwdY(a.angle) * ny > Math.cos(FRONT_CONE);
           const bFront = fwdX(b.angle) * -nx + fwdY(b.angle) * -ny > Math.cos(FRONT_CONE);
-          let ja = j0, jb = j0; // a 는 -n, b 는 +n 방향으로 받음
-          if (aFront && a.spec.front === 'MD-02') { jb *= 1.25; ja *= 0.7; }
-          if (bFront && b.spec.front === 'MD-02') { ja *= 1.25; jb *= 0.7; }
-          ja *= a.spec.armorMul; jb *= b.spec.armorMul;
-          a.vx -= (nx * ja) / ma; a.vy -= (ny * ja) / ma;
-          b.vx += (nx * jb) / mb; b.vy += (ny * jb) / mb;
+          const aPlow = aFront && a.spec.front === 'MD-02', bPlow = bFront && b.spec.front === 'MD-02';
+          // 법선 충격량: J = (1+e)·환산질량·접근속도. 양쪽에 같은 크기·반대 방향(운동량 보존)
+          const e = aPlow || bPlow ? Math.min(0.92, RESTITUTION_ROBOT + 0.12) : RESTITUTION_ROBOT;
+          const j0 = (-(1 + e) * vn) / (1 / ma + 1 / mb);
+          a.vx -= (nx * j0) / ma; a.vy -= (ny * j0) / ma;
+          b.vx += (nx * j0) / mb; b.vy += (ny * j0) / mb;
+          // 접선 마찰 충격량 → 빗맞으면 스핀이 걸린다 (원판 관성 I = ½mR²)
+          const tx = -ny, ty = nx;
+          const Ra = a.spec.radius, Rb = b.spec.radius;
+          const vt = rvx * tx + rvy * ty - b.w * Rb - a.w * Ra;
+          let jt = -vt / (3 * (1 / ma + 1 / mb));
+          const jtMax = CONTACT_FRICTION * j0;
+          jt = Math.max(-jtMax, Math.min(jtMax, jt));
+          a.vx -= (tx * jt) / ma; a.vy -= (ty * jt) / ma;
+          b.vx += (tx * jt) / mb; b.vy += (ty * jt) / mb;
+          a.w -= ((Ra * jt) / (0.5 * ma * Ra * Ra)) * (a.spec.stabilize ? 0.45 : 1);
+          b.w -= ((Rb * jt) / (0.5 * mb * Rb * Rb)) * (b.spec.stabilize ? 0.45 : 1);
+          // 모서리 토크: 힘은 맞은 면의 법선 방향으로 들어온다고 보고 r × F 를 계산
+          const [afx, afy] = faceNormal(a.angle, nx, ny);
+          const [bfx, bfy] = faceNormal(b.angle, -nx, -ny);
+          a.w += (CORNER_TORQUE * Ra * j0 * -(nx * afy - ny * afx)) / (0.5 * ma * Ra * Ra) * (a.spec.stabilize ? 0.45 : 1);
+          b.w += (CORNER_TORQUE * Rb * j0 * (nx * bfy - ny * bfx)) / (0.5 * mb * Rb * Rb) * (b.spec.stabilize ? 0.45 : 1);
           const cxp = a.x + nx * a.spec.radius, cyp = a.y + ny * a.spec.radius;
           if (j0 > 900) {
-            events.push({ t: r3(t), type: 'hit', a: a.id, b: b.id, x: r1(cxp), y: r1(cyp), impulse: Math.round(j0) });
+            events.push({ t: r3(t), type: 'hit', a: a.id, b: b.id, x: r1(cxp), y: r1(cyp), impulse: Math.round(j0), nx: r3(nx), ny: r3(ny) });
             a.lastHitBy = b.id; a.lastHitAt = t; b.lastHitBy = a.id; b.lastHitAt = t;
-            const jolt = Math.min(1.6, j0 / 22000);
-            a.w += (rand() - 0.5) * 2 * jolt * (a.spec.stabilize ? 0.4 : 1);
-            b.w += (rand() - 0.5) * 2 * jolt * (b.spec.stabilize ? 0.4 : 1);
           }
+          knock(a, j0 / ma, t, aPlow);
+          knock(b, j0 / mb, t, bPlow);
           // 범퍼 방출
           if (a.bumperArmed && !a.bumperUsed && aFront) {
             a.bumperUsed = true;
-            const J = J_BUMPER * b.spec.armorMul;
+            const J = J_BUMPER;
             b.vx += (nx * J) / mb; b.vy += (ny * J) / mb;
-            a.vx -= (nx * J * 0.45) / ma; a.vy -= (ny * J * 0.45) / ma;
+            a.vx -= (nx * J) / ma; a.vy -= (ny * J) / ma; // 반작용(같은 크기)
             b.lastHitBy = a.id; b.lastHitAt = t;
+            knock(b, (J + j0) / mb, t); knock(a, J / ma, t, true);
             events.push({ t: r3(t), type: 'bumper', id: a.id, target: b.id, x: r1(cxp), y: r1(cyp) });
           }
           if (b.bumperArmed && !b.bumperUsed && bFront) {
             b.bumperUsed = true;
-            const J = J_BUMPER * a.spec.armorMul;
+            const J = J_BUMPER;
             a.vx -= (nx * J) / ma; a.vy -= (ny * J) / ma;
-            b.vx += (nx * J * 0.45) / mb; b.vy += (ny * J * 0.45) / mb;
+            b.vx += (nx * J) / mb; b.vy += (ny * J) / mb; // 반작용(같은 크기)
             a.lastHitBy = b.id; a.lastHitAt = t;
+            knock(a, (J + j0) / ma, t); knock(b, J / mb, t, true);
             events.push({ t: r3(t), type: 'bumper', id: b.id, target: a.id, x: r1(cxp), y: r1(cyp) });
           }
         }
@@ -331,12 +402,19 @@ export function runSegment(input: SegmentInput): SegmentResult {
         if (r.fallen) continue;
         const R = r.spec.radius;
         const m = r.spec.mass;
-        const hitWall = (nx: number, ny: number) => {
+        const hitWall = (nx: number, ny: number, e = RESTITUTION_WALL) => {
           const vn = r.vx * nx + r.vy * ny;
           if (vn < 0) {
-            const j = -(1 + RESTITUTION_WALL) * vn * m;
+            const j = -(1 + e) * vn * m;
             r.vx += nx * j / m; r.vy += ny * j / m;
-            if (j > 1800) events.push({ t: r3(t), type: 'wall', id: r.id, x: r1(r.x - nx * R), y: r1(r.y - ny * R), impulse: Math.round(j) });
+            // 벽면 마찰 → 스핀
+            const tx = -ny, ty = nx;
+            const vt = r.vx * tx + r.vy * ty + r.w * R;
+            const jt = Math.max(-CONTACT_FRICTION * j, Math.min(CONTACT_FRICTION * j, (-vt * m) / 3));
+            r.vx += (tx * jt) / m; r.vy += (ty * jt) / m;
+            r.w += ((R * jt) / (0.5 * m * R * R)) * (r.spec.stabilize ? 0.45 : 1);
+            if (j > 1800) events.push({ t: r3(t), type: 'wall', id: r.id, x: r1(r.x - nx * R), y: r1(r.y - ny * R), impulse: Math.round(j), nx: r3(nx), ny: r3(ny) });
+            if (-vn > 110) knock(r, j / m * 0.6, t);
           }
         };
         if (r.x - R < minX) { r.x = minX + R; hitWall(1, 0); }
@@ -356,7 +434,7 @@ export function runSegment(input: SegmentInput): SegmentResult {
             if (px < py) { nx = Math.sign(r.x - b.x) || 1; ny = 0; } else { nx = 0; ny = Math.sign(r.y - b.y) || 1; }
           }
           r.x = qx + nx * R; r.y = qy + ny * R;
-          hitWall(nx, ny);
+          hitWall(nx, ny, RESTITUTION_BARRIER);
         }
       }
       // ---- 낙하 ----
