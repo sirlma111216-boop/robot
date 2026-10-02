@@ -46,7 +46,7 @@ const bounds: Rect = { x: cx, y: cy, w: 1360, h: 720 };
 
 export const ARENAS: Record<string, ArenaDef> = {
   'AR-01': {
-    id: 'AR-01', name: '폐차장 예선', subtitle: '왕관을 지켜라. 양옆은 낭떠러지다.', bgImage: 'AR-01', bounds,
+    id: 'AR-01', name: '폐차장 예선', subtitle: '왕관 곁을 지켜라. 양옆은 낭떠러지다.', bgImage: 'AR-01', bounds,
     barriers: [
       { x: cx, y: cy - 250, w: 280, h: 46 },
       { x: cx, y: cy + 250, w: 280, h: 46 },
@@ -91,7 +91,7 @@ export const ARENAS: Record<string, ArenaDef> = {
     ],
   },
   'AR-03': {
-    id: 'AR-03', name: '네온 도크 결승', subtitle: '네 귀퉁이가 바다다. 왕관은 미끄러운 갑판 위.', bgImage: 'AR-03', bounds,
+    id: 'AR-03', name: '네온 도크 결승', subtitle: '네 귀퉁이가 바다다. 가운데 갑판은 미끄럽다.', bgImage: 'AR-03', bounds,
     barriers: [
       { x: cx - 250, y: cy - 200, w: 200, h: 44 },
       { x: cx + 250, y: cy + 200, w: 200, h: 44 },

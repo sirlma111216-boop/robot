@@ -107,7 +107,7 @@ export interface BuildPreset { id: string; name: string; short: string; build: R
 
 export const PRESETS: BuildPreset[] = [
   { id: 'preset-balanced', name: '올라운더', short: '표준 섀시 + 범퍼. 처음이면 이걸로.', build: { chassis: 'RB-02', drive: 'DR-01', front: 'MD-01', utilities: ['MD-06'] } },
-  { id: 'preset-tank', name: '불도저', short: '중량 섀시 + 플라우 + 브레이크. 왕관을 지킨다.', build: { chassis: 'RB-03', drive: 'DR-03', front: 'MD-02', utilities: ['MD-04'] } },
+  { id: 'preset-tank', name: '불도저', short: '중량 섀시 + 플라우 + 브레이크. 버티면서 밀어낸다.', build: { chassis: 'RB-03', drive: 'DR-03', front: 'MD-02', utilities: ['MD-04'] } },
   { id: 'preset-hunter', name: '자석 사냥꾼', short: '경량 섀시 + 전자석 + 부스터. 끌어서 떨어뜨린다.', build: { chassis: 'RB-01', drive: 'DR-02', front: 'MD-03', utilities: ['MD-05', 'MD-07'] } },
 ];
 

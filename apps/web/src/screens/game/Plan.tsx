@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ARENAS, COMMAND_IDS, commandCost, planCost, previewPath, deriveSpec, validatePlan, EMOTES, type CommandId, type Plan as PlanT } from '@scrap/core';
 import { Scene, TopBar, Timer, CommandCard, CommandIcon, TeamBadge, Speaker, commandLabel } from '../../ui/common';
 import { ArenaView } from '../../ui/ArenaView';
@@ -81,7 +81,7 @@ export function Plan({ client, view }: ScreenProps) {
             <div className="row" style={{ justifyContent: 'center', gap: 8 }} role="group" aria-label="명령 슬롯">
               {(locked ?? slots).map((c, i) => (
                 <button key={i} type="button" className={`slot ${c ? 'filled' : ''} ${!locked && sel === i ? 'target' : ''}`} onClick={() => (c ? clearSlot(i) : setSel(i))} aria-label={`슬롯 ${i + 1}: ${c ? commandLabel(c as CommandId, build) : '비어 있음'}`} disabled={!!locked}>
-                  <span className="idx">{i + 1} · {i * 3}~{i * 3 + 3}s</span>
+                  <span className="idx">{i + 1} · {i * 3}~{i * 3 + 3}초</span>
                   {c ? <><CommandIcon id={c as CommandId} build={build} /><span style={{ fontSize: 12 }}>{commandLabel(c as CommandId, build)}</span></> : <span className="muted small">{sel === i ? '여기에' : ''}</span>}
                 </button>
               ))}

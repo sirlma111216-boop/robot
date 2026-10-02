@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ALL_PARTS, CHASSIS, DRIVES, FRONTS, UTILITIES, PRESETS, MASS_BUDGET, ARENAS, buildMass, validateBuild, deriveSpec, type RobotBuild, type PartKind } from '@scrap/core';
 import { Scene, TopBar, Timer, Speaker, PartCard, RobotPreview, TeamBadge } from '../../ui/common';
 import { assetUrl } from '../../assets/loader';
@@ -30,7 +30,7 @@ export function Build(props: ScreenProps) {
   };
   const mass = buildMass(build);
   const valid = validateBuild(build);
-  const spec = validateBuild(build).ok ? deriveSpec(build) : null;
+  const spec = valid.ok ? deriveSpec(build) : null;
 
   // 관전(팀 없음 / 교사 미참가): 모든 팀 조립 현황
   if (!team) {
@@ -49,7 +49,7 @@ export function Build(props: ScreenProps) {
 
   return (
     <Scene bg={pit ? 'BG-06' : 'BG-04'}>
-      <TopBar title={pit ? '피트스톱 · 부품 교체' : '개인 정비소 · 로봇 조립'} sub={arena ? `${view.match!.index + 1}경기 ${arena.name} — ${arena.subtitle}` : ''}>
+      <TopBar title={pit ? '피트스톱 · 부품 교체' : '팀 정비소 · 로봇 조립'} sub={arena ? `${view.match!.index + 1}경기 ${arena.name} — ${arena.subtitle}` : ''}>
         <span className="tag"><TeamBadge styleIndex={team.styleIndex} size={20} /> {team.name}{isLeader ? ' · 팀장' : ''}</span>
         <Timer deadline={view.deadline} serverNow={() => client.serverNow()} total={total} />
       </TopBar>
@@ -94,7 +94,7 @@ export function Build(props: ScreenProps) {
               <div className="divider" />
             </div>
           )}
-          {arena && <div className="col" style={{ gap: 2 }}><strong>다음 경기장: {arena.name}</strong><span className="small muted">{arena.subtitle}</span><span className="small muted">낙하 구역 {arena.pits.length}곳{arena.conveyors.length ? ` · 컨베이어 ${arena.conveyors.length}` : ''}{arena.slick.length ? ` · 미끄럼 바닥 ${arena.slick.length}` : ''}</span></div>}
+          {arena && <div className="col" style={{ gap: 2 }}><strong>{pit ? '다음' : '이번'} 경기장: {arena.name}</strong><span className="small muted">{arena.subtitle}</span><span className="small muted">낙하 구역 {arena.pits.length}곳{arena.conveyors.length ? ` · 컨베이어 ${arena.conveyors.length}` : ''}{arena.slick.length ? ` · 미끄럼 바닥 ${arena.slick.length}` : ''}</span></div>}
           <div className="divider" />
           <strong>규칙 한눈에</strong>
           <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}><li>전투 끝에 <b>왕관 곁(노란 원)</b>에 혼자 있으면 <b style={{ color: 'var(--amber)' }}>3점</b></li><li>왕관은 부딪히면 튕겨 나간다. 밀고, 쏘고, 자석으로 끌어라</li><li>여러 대가 연달아 부딪히면 <b>연쇄</b>로 더 세게 튕긴다</li><li>상대를 낙하 구역에 밀어 넣으면 <b style={{ color: 'var(--amber)' }}>2점</b></li><li>고철 캡슐 줍기 <b style={{ color: 'var(--amber)' }}>1점</b></li><li>떨어져도 다음 턴에 복귀. 탈락 없음</li></ul>

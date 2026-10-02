@@ -108,11 +108,6 @@ const E_MAX = 1.4;
 const COMBO_MIN_APPROACH = 30;
 const SOLVER_ITERATIONS = 4; // 한 프레임 안에서 충격이 이웃으로 전달되도록 반복
 
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
-
 const fwdX = (a: number) => Math.sin(a);
 const fwdY = (a: number) => -Math.cos(a);
 const inRect = (x: number, y: number, r: Rect) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(y - r.y) <= r.h / 2;

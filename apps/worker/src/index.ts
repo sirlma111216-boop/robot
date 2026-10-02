@@ -52,6 +52,7 @@ export default {
         const okId = (body.id ?? '') === TEACHER_ID;
         const okPw = typeof body.password === 'string' && timingSafeEqual(body.password, env.TEACHER_PASSWORD);
         if (!okId || !okPw) {
+          if (failedLogins.size > 500) failedLogins.clear();
           failedLogins.set(ip, { n: (f && now - f.at < 60_000 ? f.n : 0) + 1, at: now });
           await new Promise((r) => setTimeout(r, 700));
           return json({ ok: false, error: '아이디 또는 비밀번호가 맞지 않아요.' }, 401);

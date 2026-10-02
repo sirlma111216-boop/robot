@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { TEAM_STYLES, MAX_TEAMS, type BotLevel } from '@scrap/core';
 import { QR, TeamBadge, Timer } from '../../ui/common';
 import type { ScreenProps } from './GameFlow';
@@ -75,7 +75,7 @@ export function TeacherConsole({ client, view, drawer, onClose, onExit }: Screen
               <div className="members">{t.members.map((m) => <span key={m.id} className={`member ${m.id === t.leaderId ? 'leader' : ''} ${m.connected ? '' : 'off'}`}>{m.id === t.leaderId ? '★ ' : ''}{m.nick}{m.id !== t.leaderId && m.id !== view.teacherId && <button className="btn small ghost" style={{ minHeight: 22, padding: '0 6px', fontSize: 11 }} title="팀장으로" onClick={() => send({ t: 'teacher:assignLeader', playerId: m.id, teamId: t.id })}>★</button>}</span>)}</div>
             </div>
             <div className="col" style={{ gap: 4 }}>
-              {!t.bot && (myTeam?.id === t.id ? <button className="btn small ghost" onClick={() => send({ t: 'teacher:leaveLeader' })}>참가 그만</button> : <button className="btn small ghost" onClick={() => send({ t: 'teacher:joinAsLeader', teamId: t.id })} title="이 팀의 팀장으로 함께 참가">🎮 팀장으로 참가</button>)}
+              {!t.bot && (myTeam?.id === t.id ? <button className="btn small ghost" onClick={() => send({ t: 'teacher:leaveLeader' })}>참가 그만두기</button> : <button className="btn small ghost" onClick={() => send({ t: 'teacher:joinAsLeader', teamId: t.id })} title="이 팀의 팀장으로 함께 참가">🎮 팀장으로 참가</button>)}
               {inLobby && <button className="btn small danger" onClick={() => send({ t: 'teacher:removeTeam', teamId: t.id })}>팀 삭제</button>}
             </div>
           </div>

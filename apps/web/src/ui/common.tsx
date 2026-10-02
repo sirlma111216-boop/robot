@@ -36,7 +36,7 @@ export function Timer({ deadline, serverNow, total }: { deadline: number | null;
   const pct = total ? Math.min(100, (remain / (total * 1000)) * 100) : 100;
   return (
     <div className={`timer ${sec <= 5 ? 'urgent' : ''}`} aria-live="polite" aria-label={`남은 시간 ${sec}초`}>
-      <span>⏱ {sec}s</span>
+      <span>⏱ {sec}초</span>
       {total ? <span className="bar"><div style={{ width: `${pct}%` }} /></span> : null}
     </div>
   );
@@ -142,6 +142,13 @@ export function QR({ text, size = 200 }: { text: string; size?: number }) {
 
 export function RotateHint() {
   return <div className="rotate-hint">📱 화면을 가로로 돌려주세요.<br />경기장은 가로 화면에서 보여요.</div>;
+}
+
+/** 받침에 따라 조사를 고른다. 한글이 아니면 '이(가)' 꼴로 병기 */
+export function josa(word: string, withBatchim: string, without: string): string {
+  const code = word.charCodeAt(word.length - 1);
+  if (code < 0xac00 || code > 0xd7a3) return `${word}${withBatchim}(${without})`;
+  return word + ((code - 0xac00) % 28 !== 0 ? withBatchim : without);
 }
 
 export function useNow(intervalMs = 500): number {

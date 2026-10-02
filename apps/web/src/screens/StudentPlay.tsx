@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { navigate, sessionStore } from '../App';
 import { GameFlow } from './game/GameFlow';
 import { GameClient } from '../state/store';

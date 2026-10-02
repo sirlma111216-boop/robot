@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ARENAS, type CommandId } from '@scrap/core';
-import { Scene, TopBar, TeamBadge, CommandIcon, commandLabel } from '../../ui/common';
+import { Scene, TopBar, TeamBadge, CommandIcon, commandLabel, josa } from '../../ui/common';
 import { ArenaView } from '../../ui/ArenaView';
 import { teamInfosFromView } from '../../render/ArenaRenderer';
 import { myTeamOf, type ScreenProps } from './GameFlow';
@@ -37,7 +37,7 @@ export function Battle({ client, state, view }: ScreenProps) {
     const falls = segment.events.filter((e) => e.type === 'fall') as { id: string; by?: string }[];
     const parts: string[] = [];
     if (crown?.id) parts.push(`👑 ${name(crown.id)} 왕관 차지 +3`); else if (crown && crown.contested.length > 1) parts.push('왕관 경합으로 아무도 점수 없음');
-    for (const f of falls) parts.push(f.by ? `${name(f.by)}가 ${name(f.id)}를 떨어뜨림 +2` : `${name(f.id)} 스스로 낙하`);
+    for (const f of falls) parts.push(f.by ? `${josa(name(f.by), '이', '가')} ${josa(name(f.id), '을', '를')} 떨어뜨림 +2` : `${name(f.id)} 스스로 낙하`);
     return parts.join(' · ') || '조용한 턴. 다음 턴을 노려!';
   }, [segment]);
 

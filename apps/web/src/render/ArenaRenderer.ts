@@ -1,8 +1,8 @@
 // 경기장 캔버스 렌더러 — 서버 궤적(keyframe)을 보간 재생하고 부가 연출(스파크·먼지·링·자력·부스터)을 그린다.
 // 판정은 서버 결과만 사용하며 여기서는 위치를 바꾸지 않는다.
 import { ARENAS, ARENA_W, ARENA_H, TEAM_STYLES, CROWN_R, CROWN_ZONE_R, deriveSpec, type ArenaDef, type SegmentResult, type SimEvent, type RobotBuild, type Plan, type RobotView } from '@scrap/core';
-import { getImage, assetInfo } from '../assets/loader';
-import { drawRobot } from './RobotSprite';
+import { getImage } from '../assets/loader';
+import { drawRobot, uiFont } from './RobotSprite';
 
 export interface TeamInfo { id: string; styleIndex: number; number: number; build: RobotBuild; name: string }
 
@@ -41,6 +41,9 @@ export class ArenaRenderer {
   private crownPos = { x: ARENA_W / 2, y: ARENA_H / 2 };
   private crownKick = 0; // 왕관이 맞았을 때 잠깐 커지는 연출
   private tDisp = 0;
+  private nR = 0; // 현재 구간의 로봇 수(프레임 배열 오프셋 계산용)
+  private frameCursor = 0;
+  private radius = new Map<string, number>();
   private marks: { x: number; y: number; a: number; life: number }[] = [];
   private squash = new Map<string, { t: number; nx: number; ny: number; amt: number }>();
   private lag = 0; // 히트스톱으로 밀린 표시 시간(곧 따라잡는다 — 서버 시계는 멈추지 않음)
@@ -60,7 +63,7 @@ export class ArenaRenderer {
   }
 
   setArena(id: string) { if (this.arena.id !== id) this.arena = ARENAS[id] ?? this.arena; }
-  setTeams(teams: TeamInfo[]) { this.teams = new Map(teams.map((t) => [t.id, t])); }
+  setTeams(teams: TeamInfo[]) { this.teams = new Map(teams.map((t) => [t.id, t])); this.radius = new Map(teams.map((t) => [t.id, deriveSpec(t.build).radius])); }
   setStatic(robots: RobotView[], capsules: { id: string; x: number; y: number; taken: boolean }[], preview: { x: number; y: number }[] | null, crown?: { x: number; y: number } | null) {
     this.robots = robots; this.capsules = capsules; this.preview = preview;
     this.crownPos = crown ? { x: crown.x, y: crown.y } : { x: this.arena.crown.x, y: this.arena.crown.y };
@@ -70,6 +73,7 @@ export class ArenaRenderer {
 
   play(segment: SegmentResult, startAt: number, serverNow: () => number, hooks: PlaybackHooks = {}) {
     this.segment = segment; this.startAt = startAt; this.serverNow = serverNow; this.hooks = hooks;
+    this.nR = segment.bodies.filter((b) => b.kind === 'robot').length; this.frameCursor = 0;
     this.eventCursor = 0; this.slotFired = -1; this.ended = false; this.fx = []; this.fallen.clear(); this.magnetOn.clear(); this.flame.clear(); this.bumper.clear(); this.lastPos.clear(); this.dustTimer.clear();
     this.preview = null;
     this.skidding.clear(); this.marks = []; this.squash.clear(); this.lag = 0; this.freezeLeft = 0;
@@ -99,15 +103,25 @@ export class ArenaRenderer {
     this.draw(dt);
   };
 
+  /** tc 가 속한 keyframe 구간의 시작 인덱스. 재생은 앞으로만 가므로 커서를 이어서 쓴다. */
+  private frameIndex(tc: number): number {
+    const frames = this.segment!.frames;
+    let i = this.frameCursor;
+    if (i >= frames.length - 1 || frames[i].t > tc) i = 0;
+    while (i < frames.length - 2 && frames[i + 1].t <= tc) i++;
+    this.frameCursor = i;
+    return i;
+  }
+
   private currentT(): number { return this.segment ? (this.serverNow() - this.startAt) / 1000 : 0; }
 
   /** 궤적에서 왕관 위치를 보간해 읽는다 (없으면 null) */
   private sampleCrown(tc: number): { x: number; y: number } | null {
     const seg = this.segment; if (!seg) return null;
     const ci = seg.bodies.findIndex((b) => b.kind === 'crown'); if (ci < 0) return null;
-    const nR = seg.bodies.filter((b) => b.kind === 'robot').length;
+    const nR = this.nR;
     const o = nR * 3 + (ci - nR) * 2;
-    const frames = seg.frames; let i = 0; while (i < frames.length - 2 && frames[i + 1].t <= tc) i++;
+    const frames = seg.frames; const i = this.frameIndex(tc);
     const f0 = frames[i], f1 = frames[Math.min(i + 1, frames.length - 1)];
     const span = f1.t - f0.t; const k = span > 0 ? Math.max(0, Math.min(1, (tc - f0.t) / span)) : 0;
     // 재배치(순간 이동)는 보간하지 않는다
@@ -149,7 +163,8 @@ export class ArenaRenderer {
     // 출발 패드
     A.startPads.forEach((pad, i) => {
       this.drawImg('PR-06', pad.x, pad.y, 130, 130, pad.angle);
-      const team = [...this.teams.values()].find((t) => this.robotPad(t.id) === i);
+      const padRobot = this.robots.find((r) => r.padIndex === i);
+      const team = padRobot ? this.teams.get(padRobot.teamId) : undefined;
       if (team) { ctx.save(); ctx.strokeStyle = TEAM_STYLES[team.styleIndex].color; ctx.lineWidth = 6; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(pad.x, pad.y, 58, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
     });
     // 재생 중이면 표시 시간을 먼저 정한다(국소 히트스톱: 표시 시간만 잠깐 멈췄다가 빠르게 따라잡는다)
@@ -175,8 +190,6 @@ export class ArenaRenderer {
     this.drawFx(dt);
   }
 
-  private robotPad(teamId: string): number { const r = this.robots.find((x) => x.teamId === teamId); return r ? r.padIndex : -1; }
-
   private drawImg(id: string, x: number, y: number, w: number, h: number, rot = 0, grow = 1) {
     const img = getImage(id); if (!img) return;
     const ctx = this.ctx; ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.drawImage(img, (-w / 2) * grow, (-h / 2) * grow, w * grow, h * grow); ctx.restore();
@@ -189,8 +202,7 @@ export class ArenaRenderer {
 
   private drawRobotAt(teamId: string, x: number, y: number, angle: number, extra: { alpha?: number; scale?: number; wheelPhase?: number; bumperCompress?: number } = {}) {
     const t = this.teams.get(teamId); if (!t) return;
-    const spec = deriveSpec(t.build);
-    drawRobot(this.ctx, { x, y, angle, radius: spec.radius, build: t.build, styleIndex: t.styleIndex, number: t.number, highlight: teamId === this.myTeamId, label: t.name, ...extra });
+    drawRobot(this.ctx, { x, y, angle, radius: this.radius.get(teamId) ?? 34, build: t.build, styleIndex: t.styleIndex, number: t.number, highlight: teamId === this.myTeamId, label: t.name, ...extra });
   }
 
   private drawStatic(timeSec: number) {
@@ -217,10 +229,10 @@ export class ArenaRenderer {
     if (t >= seg.duration && !this.ended) { this.ended = true; this.hooks.onEnd?.(); }
     // 프레임 보간
     const frames = seg.frames;
-    let i = 0; while (i < frames.length - 2 && frames[i + 1].t <= tc) i++;
+    const i = this.frameIndex(tc);
     const f0 = frames[i], f1 = frames[Math.min(i + 1, frames.length - 1)];
     const span = f1.t - f0.t; const k = span > 0 ? Math.max(0, Math.min(1, (tc - f0.t) / span)) : 0;
-    const nR = seg.bodies.filter((b) => b.kind === 'robot').length;
+    const nR = this.nR;
     const positions: { id: string; x: number; y: number; a: number }[] = [];
     seg.bodies.forEach((body, bi) => {
       if (body.kind === 'robot') {
@@ -377,7 +389,7 @@ export class ArenaRenderer {
       else if (f.kind === 'ring') { const img = getImage('FX-03'); ctx.translate(f.x, f.y); ctx.globalAlpha = 1 - k; ctx.globalCompositeOperation = 'lighter'; const s = 120 * f.scale * (1 + k * 2.2); if (img) ctx.drawImage(img, -s / 2, -s / 2, s, s); }
       else if (f.kind === 'dust') { const img = getImage('FX-02'); f.x += (f.vx ?? 0) * dt; f.y += (f.vy ?? 0) * dt; ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.globalAlpha = 0.55 * (1 - k); const s = 130 * f.scale * (1 + k * 1.2); if (img) ctx.drawImage(img, -s / 2, -s * 0.3, s, s * 0.5); }
       else if (f.kind === 'glint') { const img = getImage('FX-06'); ctx.translate(f.x, f.y); ctx.rotate(k * 0.6); ctx.globalAlpha = 1 - k; ctx.globalCompositeOperation = 'lighter'; const s = 140 * f.scale * (1 + k * 1.5); if (img) ctx.drawImage(img, -s / 2, -s / 2, s, s); }
-      else if (f.kind === 'text') { ctx.translate(f.x, f.y - k * 40); ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) / 0.2; ctx.font = `900 ${34 * f.scale}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.fillStyle = f.color ?? '#fff'; ctx.strokeText(f.text ?? '', 0, 0); ctx.fillText(f.text ?? '', 0, 0); }
+      else if (f.kind === 'text') { ctx.translate(f.x, f.y - k * 40); ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) / 0.2; ctx.font = `900 ${34 * f.scale}px ${uiFont()}`; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.fillStyle = f.color ?? '#fff'; ctx.strokeText(f.text ?? '', 0, 0); ctx.fillText(f.text ?? '', 0, 0); }
       ctx.restore();
     }
     this.fx = keep;

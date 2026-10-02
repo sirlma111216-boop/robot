@@ -1,5 +1,4 @@
-import React from 'react';
-import { ARENAS, ALL_PARTS } from '@scrap/core';
+import { ARENAS, ALL_PARTS, TEAM_STYLES } from '@scrap/core';
 import { Scene, TopBar, Timer, RobotPreview, TeamBadge, Speaker } from '../../ui/common';
 import type { ScreenProps } from './GameFlow';
 
@@ -11,7 +10,7 @@ export function Intro({ client, view }: ScreenProps) {
       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 16px 24px' }}>
         <div className="row" style={{ justifyContent: 'center', gap: 12, alignItems: 'flex-end' }}>
           {view.teams.map((t, i) => (
-            <div key={t.id} className="panel tight col" style={{ width: 170, alignItems: 'center', gap: 4, borderTop: `5px solid ${['#ff5c5c', '#4d9dff', '#ffd43d', '#3fe08a', '#c47cff', '#ff9440'][t.styleIndex]}`, animation: `rise 0.5s ${i * 0.12}s both`, boxShadow: view.me?.teamId === t.id ? '0 0 0 3px var(--amber)' : undefined }}>
+            <div key={t.id} className="panel tight col" style={{ width: 170, alignItems: 'center', gap: 4, borderTop: `5px solid ${TEAM_STYLES[t.styleIndex % TEAM_STYLES.length].color}`, animation: `rise 0.5s ${i * 0.12}s both`, boxShadow: view.me?.teamId === t.id ? '0 0 0 3px var(--amber)' : undefined }}>
               <RobotPreview build={t.build} styleIndex={t.styleIndex} number={t.styleIndex + 1} size={130} />
               <div className="row" style={{ gap: 6 }}><TeamBadge styleIndex={t.styleIndex} size={20} /><strong>{t.name}</strong></div>
               <span className="small muted">팀장 {t.leaderNick}</span>

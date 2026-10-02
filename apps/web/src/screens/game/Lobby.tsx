@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { TEAM_STYLES } from '@scrap/core';
 import { Scene, TopBar, Speaker, TeamBadge, RobotPreview } from '../../ui/common';
 import { TeacherConsole } from './TeacherConsole';
@@ -6,6 +6,7 @@ import { myTeamOf, type ScreenProps } from './GameFlow';
 
 export function Lobby(props: ScreenProps) {
   const { client, view, mode, onExit } = props;
+  const [rename, setRename] = useState(''); // 훅은 조건부 return 보다 먼저
   if (mode === 'teacher') {
     return (
       <Scene bg="BG-08">
@@ -16,7 +17,6 @@ export function Lobby(props: ScreenProps) {
   }
   const me = view.me!;
   const myTeam = myTeamOf(view);
-  const [rename, setRename] = useState('');
   const free = view.players.filter((p) => p.role === 'student' && !p.teamId);
   return (
     <Scene bg="BG-02">

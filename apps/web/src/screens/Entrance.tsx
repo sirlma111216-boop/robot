@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Scene, Speaker } from '../ui/common';
 import { navigate, sessionStore } from '../App';
 import { preload, SCENE_ASSETS } from '../assets/loader';

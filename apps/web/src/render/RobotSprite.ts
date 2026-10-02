@@ -3,6 +3,10 @@
 import { CHASSIS, DRIVES, TEAM_STYLES, type RobotBuild } from '@scrap/core';
 import { getImage, assetInfo } from '../assets/loader';
 
+let FONT_FAMILY = '';
+/** body 글꼴을 한 번만 읽어 캐시한다(getComputedStyle 은 프레임마다 부르기엔 비싸다) */
+export function uiFont(): string { return FONT_FAMILY || (FONT_FAMILY = getComputedStyle(document.body).fontFamily); }
+
 export interface RobotDrawOptions {
   x: number; y: number; angle: number; radius: number;
   build: RobotBuild;
@@ -109,10 +113,10 @@ export function drawRobot(ctx: CanvasRenderingContext2D, o: RobotDrawOptions) {
   const bx = o.x + R * 1.15, by = o.y - R * 1.15;
   ctx.fillStyle = style.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(bx, by, Math.max(8, R * 0.42), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#0b1424'; ctx.font = `900 ${Math.max(10, R * 0.5)}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#0b1424'; ctx.font = `900 ${Math.max(10, R * 0.5)}px ${uiFont()}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(String(o.number), bx, by + 1);
   if (o.label) {
-    ctx.font = `700 ${Math.max(10, R * 0.42)}px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.font = `700 ${Math.max(10, R * 0.42)}px ${uiFont()}`;
     ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
     ctx.strokeText(o.label, o.x, o.y + R * 1.95); ctx.fillText(o.label, o.x, o.y + R * 1.95);
   }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Scene, TopBar } from '../ui/common';
 import { navigate } from '../App';
 import { GameFlow } from './game/GameFlow';

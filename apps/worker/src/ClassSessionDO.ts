@@ -26,20 +26,31 @@ export class ClassSessionDO extends DurableObject<Env> {
   private loaded = false;
   private rate = new Map<WebSocket, { n: number; at: number }>();
   private broadcastScheduled = false;
+  private savedSegKey = '';
 
   private async ensureLoaded() {
     if (this.loaded) return;
     const state = await this.ctx.storage.get<ClassState>('state');
     const tokens = await this.ctx.storage.get<Record<string, string>>('tokens');
-    if (state) this.host = new ClassHost(state);
+    if (state) {
+      // 궤적(segments)은 크기가 커서 별도 키에 저장한다
+      const segs = await this.ctx.storage.get<ClassState['segments']>('segments');
+      if (segs) state.segments = segs;
+      this.savedSegKey = Object.keys(state.segments ?? {}).join(',');
+      this.host = new ClassHost(state);
+    }
     if (tokens) this.tokens = tokens;
     this.loaded = true;
   }
 
   private async save() {
     if (!this.host) return;
-    await this.ctx.storage.put('state', this.host.state);
-    await this.ctx.storage.put('lastActivity', Date.now());
+    // 상태 본문은 매번, 궤적은 새 구간이 생겼을 때만 쓴다(명령 제안 같은 잦은 메시지마다 수십 KB 를 다시 쓰지 않도록)
+    const { segments, ...rest } = this.host.state;
+    const puts: Record<string, unknown> = { state: { ...rest, segments: {} }, lastActivity: Date.now() };
+    const segKey = Object.keys(segments).join(',');
+    if (segKey !== this.savedSegKey) { puts.segments = segments; this.savedSegKey = segKey; }
+    await this.ctx.storage.put(puts);
     await this.scheduleAlarm();
   }
 

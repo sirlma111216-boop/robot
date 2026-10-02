@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { RobotView, SegmentResult } from '@scrap/core';
 import { ArenaRenderer, type TeamInfo, type PlaybackHooks } from '../render/ArenaRenderer';
 import { preload, SCENE_ASSETS } from '../assets/loader';

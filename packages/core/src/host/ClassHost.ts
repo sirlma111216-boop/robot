@@ -2,7 +2,7 @@
 // 시간은 항상 인자로 받는다(now). 예약은 nextWakeAt() 로 알려주고, 호출자가 알람/타이머를 건다.
 import type { ClassState, ClassView, HostEffect, MatchState, Phase, Player, Settings, Team, TeamView } from './types';
 import type { ClientMessage } from '../protocol/messages';
-import { PRESETS, validateBuild, type RobotBuild } from '../content/parts';
+import { PRESETS, validateBuild } from '../content/parts';
 import { ARENAS, CHAPTERS } from '../content/arenas';
 import { DEFAULT_TIMING, RANK_POINTS, RULES_VERSION, CONTENT_VERSION, PHYSICS_VERSION, SAFE_PLAN, TURNS_PER_MATCH } from '../content/rules';
 import { MAX_TEAMS, MAX_STUDENTS, DEFAULT_MAX_TEAM_SIZE, TEAM_NAME_POOL } from '../content/teams';
@@ -10,7 +10,7 @@ import { deriveSpec, validatePlan, planCost, type Plan } from '../rules/commands
 import { runSegment, respawnFallen, type RobotSimState } from '../physics/sim';
 import { planForBot, buildForBot, BOT_NAMES, type BotLevel } from '../bots/bot';
 
-const MAX_SEGMENTS_KEPT = 4;
+const MAX_SEGMENTS_KEPT = 2; // 현재 구간 + 직전 구간(재접속용)
 const ID_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
 
 function hashSeed(...parts: number[]): number {
@@ -34,7 +34,7 @@ export class ClassHost {
     else {
       this.state = {
         code: init.code, createdAt: init.now, locked: false,
-        settings: { matches: 3, buildSeconds: DEFAULT_TIMING.buildSeconds, planSeconds: DEFAULT_TIMING.planSeconds, pitstopSeconds: DEFAULT_TIMING.pitstopSeconds, introSeconds: DEFAULT_TIMING.introSeconds, resultSeconds: DEFAULT_TIMING.resultSeconds, maxTeamSize: DEFAULT_MAX_TEAM_SIZE, autoAdvance: true, allowSpectateTeams: true, botLevel: 'normal' },
+        settings: makeSettings(),
         players: {}, teams: {}, teamOrder: [], phase: 'LOBBY', phaseVersion: 1, deadline: null, match: null, history: [],
         seed: init.seed, versions: { rules: RULES_VERSION, content: CONTENT_VERSION, physics: PHYSICS_VERSION },
         teacherId: init.teacherId, prevLeader: {}, segments: {},
@@ -97,7 +97,7 @@ export class ClassHost {
         if (!t) return { ok: false, error: '없는 팀이에요.' };
         if (t.bot) return { ok: false, error: '봇 팀에는 들어갈 수 없어요.' };
         if (isLeader) return { ok: false, error: '팀장은 팀을 옮길 수 없어요. 선생님께 말해요.' };
-        if (t.members.filter((m) => m !== t.leaderId).length + 1 > st.settings.maxTeamSize && t.id !== p.teamId) return { ok: false, error: '이 팀은 자리가 없어요.' };
+        if (t.id !== p.teamId && t.members.length >= st.settings.maxTeamSize) return { ok: false, error: '이 팀은 자리가 없어요.' };
         this.movePlayer(p, t.id);
         return { ok: true };
       }
