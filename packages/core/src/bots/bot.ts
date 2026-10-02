@@ -1,6 +1,6 @@
 // 봇: 공개 상태만 보고 제한된 후보 명령을 같은 물리로 평가하는 휴리스틱. 외부 API 없음.
 import type { ArenaDef } from '../content/arenas';
-import { runSegment, type RobotSimState, type CapsuleState } from '../physics/sim';
+import { runSegment, CROWN_ZONE_R, type RobotSimState, type CapsuleState, type CrownState } from '../physics/sim';
 import { planCost, type Plan, type CommandId } from '../rules/commands';
 import { PRESETS, type RobotBuild } from '../content/parts';
 
@@ -12,6 +12,7 @@ export interface BotContext {
   me: RobotSimState;
   others: RobotSimState[];
   capsules: CapsuleState[];
+  crown?: CrownState;
   energy: number;
   seed: number;
 }
@@ -43,11 +44,12 @@ function legalPlans(build: RobotBuild, energy: number, r: () => number, extra: n
 
 function evaluate(ctx: BotContext, plan: Plan, otherPlans: Record<string, Plan>): number {
   const robots = [ctx.me, ...ctx.others].map((x) => ({ ...x }));
-  const res = runSegment({ arena: ctx.arena, turn: ctx.turn, robots, capsules: ctx.capsules.map((c) => ({ ...c })), plans: { [ctx.me.id]: plan, ...otherPlans }, seed: ctx.seed });
+  const res = runSegment({ arena: ctx.arena, turn: ctx.turn, robots, capsules: ctx.capsules.map((c) => ({ ...c })), plans: { [ctx.me.id]: plan, ...otherPlans }, seed: ctx.seed, crown: ctx.crown ? { ...ctx.crown } : undefined });
   const me = res.robots.find((x) => x.id === ctx.me.id)!;
   let s = (res.scores[ctx.me.id] ?? 0) * 10;
   if (me.fallen) s -= 24;
-  const dCrown = Math.hypot(me.x - ctx.arena.crown.x, me.y - ctx.arena.crown.y);
+  const cx = res.crown?.x ?? ctx.arena.crown.x, cy = res.crown?.y ?? ctx.arena.crown.y;
+  const dCrown = Math.hypot(me.x - cx, me.y - cy);
   s -= Math.min(6, dCrown / 90);
   // 왕관 안에 있는데 경합이면 약간 감점(밀어내기 유도)
   const crown = res.events.find((e) => e.type === 'crown') as { contested: string[] } | undefined;
@@ -62,8 +64,8 @@ function evaluate(ctx: BotContext, plan: Plan, otherPlans: Record<string, Plan>)
     let d = Infinity;
     for (const p of ctx.arena.pits) d = Math.min(d, Math.hypot(o.x - p.x, o.y - p.y) - p.r);
     if (d < 160) s += (160 - d) / 80;
-    const oc = Math.hypot(o.x - ctx.arena.crown.x, o.y - ctx.arena.crown.y);
-    if (oc < ctx.arena.crown.r) s -= 1.2;
+    const oc = Math.hypot(o.x - cx, o.y - cy);
+    if (oc < CROWN_ZONE_R) s -= 1.2;
   }
   s += (ctx.energy - planCost(plan, ctx.me.spec.build)) * 0.25;
   return s;

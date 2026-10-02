@@ -36,7 +36,7 @@ export function Battle({ client, state, view }: ScreenProps) {
     const crown = segment.events.find((e) => e.type === 'crown') as { id: string | null; contested: string[] } | undefined;
     const falls = segment.events.filter((e) => e.type === 'fall') as { id: string; by?: string }[];
     const parts: string[] = [];
-    if (crown?.id) parts.push(`👑 ${name(crown.id)} 왕관 점유 +3`); else if (crown && crown.contested.length > 1) parts.push('왕관 경합으로 아무도 점수 없음');
+    if (crown?.id) parts.push(`👑 ${name(crown.id)} 왕관 차지 +3`); else if (crown && crown.contested.length > 1) parts.push('왕관 경합으로 아무도 점수 없음');
     for (const f of falls) parts.push(f.by ? `${name(f.by)}가 ${name(f.id)}를 떨어뜨림 +2` : `${name(f.id)} 스스로 낙하`);
     return parts.join(' · ') || '조용한 턴. 다음 턴을 노려!';
   }, [segment]);
@@ -47,7 +47,7 @@ export function Battle({ client, state, view }: ScreenProps) {
         <span className="tag">{slot < 0 ? '전투 시작 준비…' : ended ? '결과 정리' : `${slot + 1}번 명령 실행 중`}</span>
       </TopBar>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', padding: '0 10px 10px' }}>
-        <ArenaView arenaId={m.arenaId} teams={teams} myTeamId={team?.id ?? null} robots={m.robots} capsules={m.capsules} playback={playback} reduceFx={reduceFx} />
+        <ArenaView arenaId={m.arenaId} teams={teams} myTeamId={team?.id ?? null} robots={m.robots} capsules={m.capsules} crown={m.crown} playback={playback} reduceFx={reduceFx} />
         <div className="hud">
           <div className="score-strip">
             {view.teams.map((t) => <span key={t.id} className="score-chip"><TeamBadge styleIndex={t.styleIndex} size={18} />{t.name}<span className="pts">{t.matchScore - (m.turnScores[t.id] ?? 0) + (deltas[t.id] ?? 0)}</span>{deltas[t.id] ? <span style={{ color: 'var(--ok)' }}>+{deltas[t.id]}</span> : null}</span>)}

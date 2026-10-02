@@ -68,7 +68,7 @@ export function Plan({ client, view }: ScreenProps) {
       </TopBar>
       <div style={{ flex: 1, display: 'flex', gap: 10, padding: '0 10px 10px', minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          <ArenaView arenaId={m.arenaId} teams={teams} myTeamId={team?.id ?? null} robots={m.robots} capsules={m.capsules} preview={preview} />
+          <ArenaView arenaId={m.arenaId} teams={teams} myTeamId={team?.id ?? null} robots={m.robots} capsules={m.capsules} crown={m.crown} preview={preview} />
           <div className="hud"><div className="score-strip">{view.teams.map((t) => <span key={t.id} className="score-chip" style={{ borderColor: t.planLocked ? 'var(--teal)' : undefined }}><TeamBadge styleIndex={t.styleIndex} size={18} />{t.name}<span className="pts">{t.matchScore}</span>{t.planLocked ? '🔒' : ''}</span>)}</div></div>
           {myRobot?.fallen && <div className="float-msg">이번 턴은 정비 구역에서 대기 · 다음 턴에 복귀</div>}
         </div>

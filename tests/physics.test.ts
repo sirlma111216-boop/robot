@@ -35,11 +35,13 @@ describe('physics', () => {
     const f2 = solo.events.find(e => e.type === 'fall') as any;
     expect(f2).toBeTruthy(); expect(f2.by).toBeUndefined(); expect(solo.scores.s).toBe(0);
   });
-  it('왕관 단독 점유 3점, 캡슐 1점', () => {
-    const pad = arena.startPads[0];
-    const a = robot('a', 0, pad.x, pad.y, pad.angle);
-    const res = runSegment({ arena, turn: 1, robots: [a], capsules: [{ id: 'c1', x: (pad.x + 800) / 2, y: (pad.y + 450) / 2, vx: 0, vy: 0, taken: false }], plans: { a: ['FWD', 'BRAKE', 'BRAKE'] } as any, seed: 1 });
-    console.log('final', res.robots[0].x.toFixed(0), res.robots[0].y.toFixed(0), 'score', res.scores.a);
+  it('왕관 곁에 혼자 있으면 3점, 캡슐 1점', () => {
+    // 왕관(중앙 800,450) 곁 110px 에 서 있고, 캡슐은 바로 옆
+    const a = robot('a', 0, 800, 560, 0);
+    const res = runSegment({ arena, turn: 1, robots: [a], capsules: [{ id: 'c1', x: 800, y: 590, vx: 0, vy: 0, taken: false }], plans: { a: ['BRAKE', 'BRAKE', 'BRAKE'] } as any, seed: 1 });
     expect(res.scores.a).toBe(4);
+    // 멀리 있으면 왕관 점수 없음
+    const far = runSegment({ arena, turn: 1, robots: [robot('a', 0, 800, 700, 0)], capsules: [], plans: { a: ['BRAKE', 'BRAKE', 'BRAKE'] } as any, seed: 1 });
+    expect(far.scores.a).toBe(0);
   });
 });

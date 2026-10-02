@@ -37,7 +37,7 @@ describe('충돌: 운동량·충격량·탄성', () => {
     expect(vx(1, fi + 1)).toBeGreaterThan(60); // 가벼운 쪽이 튕겨 나간다(진행 방향 반대)
   });
   it('빗맞으면 스핀이 걸린다', () => {
-    const res = runSegment({ arena, turn: 1, robots: [R('a', 0, 500, 330, Math.PI / 2), R('b', 0, 800, 370, 0)], capsules: [], plans: { a: ['FWD', 'WAIT', 'WAIT'], b: ['WAIT', 'WAIT', 'WAIT'] } as any, seed: 3 });
+    const res = runSegment({ arena, turn: 1, robots: [R('a', 0, 900, 330, Math.PI / 2), R('b', 0, 1200, 370, 0)], capsules: [], plans: { a: ['FWD', 'WAIT', 'WAIT'], b: ['WAIT', 'WAIT', 'WAIT'] } as any, seed: 3 });
     const hit = res.events.find((e) => e.type === 'hit') as any;
     const fi = res.frames.findIndex((f) => f.t >= hit.t);
     const turned = Math.abs(res.frames[Math.min(res.frames.length - 1, fi + 16)].p[5] - res.frames[fi].p[5]);
@@ -52,5 +52,38 @@ describe('충돌: 운동량·충격량·탄성', () => {
     const vy = (res.frames[fi + 2].p[1] - res.frames[fi + 1].p[1]) / 0.05;
     console.log(`완충벽 충돌 뒤 되튐 속도 ${vy.toFixed(0)}px/s`);
     expect(vy).toBeLessThan(-40);
+  });
+  it('왕관은 로봇에 부딪히면 튕겨 나가고 벽에 반사된다', () => {
+    const res = runSegment({ arena, turn: 1, robots: [R('a', 0, 620, 640, Math.atan2(180, 190))], capsules: [], plans: { a: ['FWD', 'FWD', 'BRAKE'] } as any, seed: 5 });
+    const hit = res.events.find((e) => e.type === 'crownHit') as any;
+    expect(hit).toBeTruthy();
+    const moved = Math.hypot(res.crown!.x - 800, res.crown!.y - 450);
+    const walls = res.events.filter((e) => e.type === 'crownWall' || e.type === 'crownReset').length;
+    console.log(`왕관 충격량 ${hit.impulse} · 이동 ${moved.toFixed(0)}px · 벽 반사/재배치 ${walls}회 · 최종 (${res.crown!.x.toFixed(0)}, ${res.crown!.y.toFixed(0)})`);
+    expect(moved).toBeGreaterThan(150);
+    // 로봇과 겹치지 않는다
+    const a = res.robots[0];
+    expect(Math.hypot(a.x - res.crown!.x, a.y - res.crown!.y)).toBeGreaterThanOrEqual(a.spec.radius + 29);
+  });
+  it('여러 대가 한꺼번에 부딪히면 연쇄로 더 크게 튕긴다(운동량 합은 보존)', () => {
+    const maxOut = (n: number) => {
+      // n 대가 한 점(1100,330)을 향해 사방에서 돌진
+      const robots = Array.from({ length: n }, (_, i) => { const ang = (i / n) * Math.PI * 2; const x = 1100 + Math.cos(ang) * 230, y = 330 + Math.sin(ang) * 230; return R('r' + i, 0, x, y, Math.atan2(1100 - x, -(330 - y))); });
+      const plans: any = {}; for (const r of robots) plans[r.id] = ['FWD', 'WAIT', 'WAIT'];
+      const res = runSegment({ arena, turn: 1, robots, capsules: [], plans, seed: 6, crown: null });
+      const hits = res.events.filter((e) => e.type === 'hit') as any[];
+      const fi = res.frames.findIndex((f) => f.t >= hits[0].t);
+      let vmax = 0, px = 0, py = 0;
+      for (let k = fi + 2; k < Math.min(res.frames.length - 1, fi + 10); k++) for (let b = 0; b < n; b++) {
+        const dt = res.frames[k + 1].t - res.frames[k].t; const vx = (res.frames[k + 1].p[b * 3] - res.frames[k].p[b * 3]) / dt, vy = (res.frames[k + 1].p[b * 3 + 1] - res.frames[k].p[b * 3 + 1]) / dt;
+        vmax = Math.max(vmax, Math.hypot(vx, vy)); if (k === fi + 3) { px += vx; py += vy; }
+      }
+      return { vmax, combo: Math.max(...hits.map((h) => h.combo)), p: Math.hypot(px, py) };
+    };
+    const two = maxOut(2), four = maxOut(4);
+    console.log(`2대 정면: 최대 되튐 ${two.vmax.toFixed(0)}px/s (연쇄 ${two.combo}) · 4대 집결: 최대 되튐 ${four.vmax.toFixed(0)}px/s (연쇄 ${four.combo}) · 4대 운동량 합 ${four.p.toFixed(0)}`);
+    expect(four.combo).toBeGreaterThanOrEqual(2);
+    expect(four.vmax).toBeGreaterThan(two.vmax * 1.15);
+    expect(four.p).toBeLessThan(60); // 대칭 집결이므로 합은 0 근처
   });
 });

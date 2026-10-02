@@ -9,6 +9,7 @@ export interface ArenaViewProps {
   myTeamId: string | null;
   robots: RobotView[];
   capsules: { id: string; x: number; y: number; taken: boolean }[];
+  crown?: { x: number; y: number } | null;
   preview?: { x: number; y: number }[] | null;
   playback?: { segmentId: string; segment: SegmentResult; startAt: number; serverNow: () => number; hooks?: PlaybackHooks } | null;
   reduceFx?: boolean;
@@ -31,7 +32,7 @@ export function ArenaView(p: ArenaViewProps) {
   useEffect(() => { const r = rendererRef.current; if (r) { r.setArena(p.arenaId); preload([p.arenaId]); } }, [p.arenaId]);
   useEffect(() => { rendererRef.current?.setTeams(p.teams); }, [JSON.stringify(p.teams.map((t) => [t.id, t.styleIndex, t.build, t.name]))]);
   useEffect(() => { const r = rendererRef.current; if (r) { r.myTeamId = p.myTeamId; r.reduceFx = !!p.reduceFx; } }, [p.myTeamId, p.reduceFx]);
-  useEffect(() => { if (!p.playback) rendererRef.current?.setStatic(p.robots, p.capsules, p.preview ?? null); }, [p.robots, p.capsules, p.preview, !!p.playback]);
+  useEffect(() => { if (!p.playback) rendererRef.current?.setStatic(p.robots, p.capsules, p.preview ?? null, p.crown ?? null); }, [p.robots, p.capsules, p.preview, p.crown?.x, p.crown?.y, !!p.playback]);
   useEffect(() => {
     const r = rendererRef.current; if (!r) return;
     if (p.playback) {

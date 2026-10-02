@@ -388,7 +388,7 @@ export class ClassHost {
       const pad = arena.startPads[i % arena.startPads.length];
       return { id: t.id, spec: deriveSpec(t.build), x: pad.x, y: pad.y, angle: pad.angle, vx: 0, vy: 0, w: 0, fallen: false, padIndex: i };
     });
-    st.match = { index, arenaId, turn: 0, robots, capsules: [], capsuleSeq: 0, segmentId: null, startAt: null, revealedPlans: {}, turnScores: {}, seed: hashSeed(st.seed, index + 1, 991) };
+    st.match = { index, arenaId, turn: 0, robots, capsules: [], crown: { x: arena.crown.x, y: arena.crown.y, vx: 0, vy: 0 }, capsuleSeq: 0, segmentId: null, startAt: null, revealedPlans: {}, turnScores: {}, seed: hashSeed(st.seed, index + 1, 991) };
     for (const t of teams) {
       t.matchScore = 0; t.breakdown = { crown: 0, push: 0, capsule: 0 }; t.proposals = []; t.lockedPlan = null; t.buildReady = !!t.bot; t.suggestions = [];
     }
@@ -431,7 +431,7 @@ export class ClassHost {
       if (!t.bot) continue;
       const me = m.robots.find((r) => r.id === t.id)!;
       const plan = planForBot(t.bot.level, {
-        arena, turn, me, others: m.robots.filter((r) => r.id !== t.id), capsules: m.capsules, energy: t.energy,
+        arena, turn, me, others: m.robots.filter((r) => r.id !== t.id), capsules: m.capsules, crown: m.crown, energy: t.energy,
         seed: hashSeed(m.seed, turn, t.styleIndex + 1),
       });
       t.lockedPlan = plan;
@@ -459,8 +459,8 @@ export class ClassHost {
       t.energy = Math.max(0, t.energy - planCost(plan, t.build));
     }
     const seed = hashSeed(m.seed, m.turn, 4242);
-    const result = runSegment({ arena, turn: m.turn, robots: m.robots, capsules: m.capsules, plans, seed });
-    m.robots = result.robots; m.capsules = result.capsules;
+    const result = runSegment({ arena, turn: m.turn, robots: m.robots, capsules: m.capsules, plans, seed, crown: m.crown ?? { x: arena.crown.x, y: arena.crown.y, vx: 0, vy: 0 } });
+    m.robots = result.robots; m.capsules = result.capsules; if (result.crown) m.crown = result.crown;
     m.revealedPlans = plans; m.turnScores = result.scores;
     for (const t of this.allTeams()) {
       const d = result.scores[t.id] ?? 0; t.matchScore += d;
@@ -539,6 +539,7 @@ export class ClassHost {
         index: m.index, arenaId: m.arenaId, turn: m.turn, totalTurns: TURNS_PER_MATCH,
         robots: m.robots.map((r) => ({ teamId: r.id, x: r.x, y: r.y, angle: r.angle, fallen: r.fallen, padIndex: r.padIndex })),
         capsules: m.capsules.map((c) => ({ id: c.id, x: c.x, y: c.y, taken: c.taken })),
+        crown: m.crown ? { x: m.crown.x, y: m.crown.y } : { x: ARENAS[m.arenaId].crown.x, y: ARENAS[m.arenaId].crown.y },
         segmentId: m.segmentId, startAt: m.startAt,
         revealedPlans: st.phase === 'BATTLE' ? m.revealedPlans : {},
         turnScores: st.phase === 'BATTLE' ? m.turnScores : {},

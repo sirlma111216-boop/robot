@@ -15,6 +15,8 @@ export interface RobotSimState {
   padIndex: number; // 복귀할 출발 패드
 }
 export interface CapsuleState { id: string; x: number; y: number; vx: number; vy: number; taken: boolean }
+/** 왕관 코어: 가볍고 탄성 좋은 퍽. 로봇·벽에 튕기며, 전투 종료 시 왕관 곁(CROWN_ZONE_R)에 혼자 있는 로봇이 득점한다. */
+export interface CrownState { x: number; y: number; vx: number; vy: number }
 
 export interface SegmentInput {
   arena: ArenaDef;
@@ -23,11 +25,16 @@ export interface SegmentInput {
   capsules: CapsuleState[];
   plans: Record<string, Plan>;
   seed: number;
+  /** null 이면 왕관 없이 계산(예상 경로용). 생략하면 경기장 중앙에서 시작 */
+  crown?: CrownState | null;
 }
 
 export type SimEvent =
   | { t: number; type: 'slot'; index: number }
-  | { t: number; type: 'hit'; a: string; b: string; x: number; y: number; impulse: number; nx: number; ny: number }
+  | { t: number; type: 'hit'; a: string; b: string; x: number; y: number; impulse: number; nx: number; ny: number; combo: number }
+  | { t: number; type: 'crownHit'; id: string; x: number; y: number; impulse: number; nx: number; ny: number; combo: number }
+  | { t: number; type: 'crownWall'; x: number; y: number; impulse: number }
+  | { t: number; type: 'crownReset'; x: number; y: number }
   | { t: number; type: 'skid'; id: string; on: boolean }
   | { t: number; type: 'wall'; id: string; x: number; y: number; impulse: number; nx: number; ny: number }
   | { t: number; type: 'bumper'; id: string; target: string; x: number; y: number }
@@ -43,17 +50,18 @@ export interface Keyframe { t: number; p: number[] }
 export interface SegmentResult {
   physicsVersion: string;
   duration: number;
-  bodies: { id: string; kind: 'robot' | 'capsule' }[];
+  bodies: { id: string; kind: 'robot' | 'capsule' | 'crown' }[];
   frames: Keyframe[];
   events: SimEvent[];
   robots: RobotSimState[]; // 구간 종료 상태(속도 안정화 적용 후)
   capsules: CapsuleState[];
+  crown: CrownState | null;
   scores: Record<string, number>; // 로봇별 이 구간 득점
 }
 
 // ---- 상수 (상대 단위) ----
 const DT = 1 / PHYSICS_HZ;
-const MAX_SPEED = 560;
+const MAX_SPEED = 720;
 const A_MAX_GRIP = 330; // grip 1.0 일 때 엔진 가속 상한
 const V_ENGINE_MAX = 145; // 엔진만으로 도달하는 최고 속도(부스터·충돌은 초과 가능)
 const OVERSPEED_DRAG = 260; // 엔진 최고 속도 초과분 감속
@@ -71,7 +79,7 @@ const CORNER_TORQUE = 0.5; // 각진 차체: 면 중앙이 아닌 모서리 쪽�
 const CONTACT_FRICTION = 0.45; // 빗맞을 때 접선 마찰 충격량 한계(μ·Jn) → 스핀
 // 접지 상실(스키드): 큰 충격을 받으면 타이어가 미끄러져 받은 운동량대로 밀려난다
 const SKID_DV_MIN = 40; // 이 속도 변화 이상이면 접지 상실
-const SKID_DECEL = 70; // 미끄럼 마찰 감속(등방)
+const SKID_DECEL = 58; // 미끄럼 마찰 감속(등방)
 const SKID_EXIT_SPEED = 50; // 이 속도 아래로 떨어지면 접지 회복
 const SKID_MAX_SEC = 2.2;
 // 용수철 범퍼: 저장한 탄성 에너지를 방출. 작용·반작용으로 양쪽에 같은 크기의 충격량
@@ -84,6 +92,21 @@ const BOOST_DV = 250;
 const CAPSULE_R = 18;
 const CAPSULE_MASS = 6;
 const FRONT_CONE = (48 * Math.PI) / 180;
+// 왕관 퍽
+export const CROWN_R = 30;
+export const CROWN_ZONE_R = 125; // 로봇 중심이 왕관 중심에서 이 거리 안이면 "왕관 곁"
+const CROWN_MASS = 34;
+const CROWN_E = 0.88;
+const CROWN_WALL_E = 0.82;
+const CROWN_DECEL = 40;
+const CROWN_MAX_SPEED = 680;
+// 연쇄 충돌: 짧은 시간 안에 서로 다른 상대와 부딪힌 수만큼 반발계수가 올라간다(1 초과 = 초탄성).
+// 충격량은 항상 양쪽에 같은 크기·반대 방향이므로 운동량은 보존되고, 눌린 프레임이 되튀며 에너지만 더해진다.
+const COMBO_WINDOW = 0.9;
+const COMBO_E_STEP = 0.25;
+const E_MAX = 1.4;
+const COMBO_MIN_APPROACH = 30;
+const SOLVER_ITERATIONS = 4; // 한 프레임 안에서 충격이 이웃으로 전달되도록 반복
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -119,6 +142,7 @@ interface Live extends RobotSimState {
   skid: number; // 남은 최소 미끄럼 시간
   skidTotal: number; // 이번 미끄럼 누적 시간
   skidding: boolean;
+  partners: Map<string, number>; // 최근에 부딪힌 상대 → 시각
 }
 
 export function runSegment(input: SegmentInput): SegmentResult {
@@ -127,13 +151,24 @@ export function runSegment(input: SegmentInput): SegmentResult {
   const frames: Keyframe[] = [];
   const robots: Live[] = input.robots.map((r) => ({
     ...r, cmd: 'WAIT', targetAngle: r.angle, bumperArmed: false, bumperUsed: false, magnetOn: false, plowRam: false,
-    brakeUtil: false, braking: false, lastHitBy: null, lastHitAt: -99, score: 0, skid: 0, skidTotal: 0, skidding: false,
+    brakeUtil: false, braking: false, lastHitBy: null, lastHitAt: -99, score: 0, skid: 0, skidTotal: 0, skidding: false, partners: new Map(),
   }));
   const capsules: CapsuleState[] = input.capsules.map((c) => ({ ...c }));
-  const bodies = [
+  const crown: CrownState | null = input.crown === null ? null : input.crown ? { ...input.crown } : { x: arena.crown.x, y: arena.crown.y, vx: 0, vy: 0 };
+  const bodies: SegmentResult['bodies'] = [
     ...robots.map((r) => ({ id: r.id, kind: 'robot' as const })),
     ...capsules.map((c) => ({ id: c.id, kind: 'capsule' as const })),
+    ...(crown ? [{ id: 'crown', kind: 'crown' as const }] : []),
   ];
+  const pairLast = new Map<string, number>();
+  /** 서로 다른 상대와의 충돌을 기록하고 현재 연쇄 수를 돌려준다 */
+  const touch = (r: Live, other: string, t: number): number => {
+    r.partners.set(other, t);
+    let n = 0;
+    for (const [k, at] of r.partners) { if (t - at <= COMBO_WINDOW) n++; else r.partners.delete(k); }
+    return n;
+  };
+  const comboOf = (r: Live, t: number): number => { let n = 0; for (const at of r.partners.values()) if (t - at <= COMBO_WINDOW) n++; return Math.max(1, n); };
   const bounds = arena.bounds;
   const minX = bounds.x - bounds.w / 2, maxX = bounds.x + bounds.w / 2;
   const minY = bounds.y - bounds.h / 2, maxY = bounds.y + bounds.h / 2;
@@ -142,6 +177,7 @@ export function runSegment(input: SegmentInput): SegmentResult {
     const p: number[] = [];
     for (const r of robots) p.push(r1(r.x), r1(r.y), r3(r.angle));
     for (const c of capsules) p.push(c.taken ? -1000 : r1(c.x), c.taken ? -1000 : r1(c.y));
+    if (crown) p.push(r1(crown.x), r1(crown.y));
     frames.push({ t: r3(t), p });
   };
 
@@ -299,6 +335,14 @@ export function runSegment(input: SegmentInput): SegmentResult {
           if (!p) continue;
           c.vx -= p.nx * p.accT * DT; c.vy -= p.ny * p.accT * DT;
         }
+        if (crown) {
+          const p = pull(crown.x, crown.y, CROWN_MASS, false);
+          if (p) {
+            const acc = Math.min(p.accT, 520);
+            crown.vx -= p.nx * acc * DT; crown.vy -= p.ny * acc * DT;
+            r.vx += p.nx * ((acc * CROWN_MASS) / r.spec.mass) * DT; r.vy += p.ny * ((acc * CROWN_MASS) / r.spec.mass) * DT; // 반작용
+          }
+        }
       }
       // ---- 속도 상한 & 적분 ----
       for (const r of robots) {
@@ -314,7 +358,18 @@ export function runSegment(input: SegmentInput): SegmentResult {
         c.x = Math.max(minX + CAPSULE_R, Math.min(maxX - CAPSULE_R, c.x));
         c.y = Math.max(minY + CAPSULE_R, Math.min(maxY - CAPSULE_R, c.y));
       }
-      // ---- 충돌: 로봇-로봇 ----
+      if (crown) {
+        const slickC = arena.slick.some((sl) => inRect(crown.x, crown.y, sl));
+        let sp = Math.hypot(crown.vx, crown.vy);
+        const dd = CROWN_DECEL * (slickC ? 0.25 : 1) * DT;
+        const kk = sp <= dd ? 0 : (sp - dd) / sp;
+        crown.vx *= kk; crown.vy *= kk; sp *= kk;
+        if (sp > CROWN_MAX_SPEED) { crown.vx *= CROWN_MAX_SPEED / sp; crown.vy *= CROWN_MAX_SPEED / sp; }
+        for (const c of arena.conveyors) if (inRect(crown.x, crown.y, c)) { crown.vx += (c.vx - crown.vx) * 2.5 * DT; crown.vy += (c.vy - crown.vy) * 2.5 * DT; }
+        crown.x += crown.vx * DT; crown.y += crown.vy * DT;
+      }
+      // ---- 충돌: 로봇-로봇, 로봇-왕관 (반복 풀이로 연쇄 전달) ----
+      for (let iter = 0; iter < SOLVER_ITERATIONS; iter++) {
       for (let i = 0; i < robots.length; i++) {
         const a = robots[i]; if (a.fallen) continue;
         for (let j = i + 1; j < robots.length; j++) {
@@ -336,8 +391,14 @@ export function runSegment(input: SegmentInput): SegmentResult {
           const aFront = fwdX(a.angle) * nx + fwdY(a.angle) * ny > Math.cos(FRONT_CONE);
           const bFront = fwdX(b.angle) * -nx + fwdY(b.angle) * -ny > Math.cos(FRONT_CONE);
           const aPlow = aFront && a.spec.front === 'MD-02', bPlow = bFront && b.spec.front === 'MD-02';
+          // 연쇄 수: 이 충돌을 포함해 최근에 부딪힌 서로 다른 상대의 수
+          const pk = a.id + '|' + b.id;
+          const fresh = -vn > COMBO_MIN_APPROACH && t - (pairLast.get(pk) ?? -9) > 0.12;
+          let combo = Math.max(comboOf(a, t), comboOf(b, t));
+          if (fresh) { pairLast.set(pk, t); combo = Math.max(touch(a, b.id, t), touch(b, a.id, t)); }
           // 법선 충격량: J = (1+e)·환산질량·접근속도. 양쪽에 같은 크기·반대 방향(운동량 보존)
-          const e = aPlow || bPlow ? Math.min(0.92, RESTITUTION_ROBOT + 0.12) : RESTITUTION_ROBOT;
+          const eBase = aPlow || bPlow ? Math.min(0.92, RESTITUTION_ROBOT + 0.12) : RESTITUTION_ROBOT;
+          const e = Math.min(E_MAX, eBase + COMBO_E_STEP * (combo - 1));
           const j0 = (-(1 + e) * vn) / (1 / ma + 1 / mb);
           a.vx -= (nx * j0) / ma; a.vy -= (ny * j0) / ma;
           b.vx += (nx * j0) / mb; b.vy += (ny * j0) / mb;
@@ -358,8 +419,8 @@ export function runSegment(input: SegmentInput): SegmentResult {
           a.w += (CORNER_TORQUE * Ra * j0 * -(nx * afy - ny * afx)) / (0.5 * ma * Ra * Ra) * (a.spec.stabilize ? 0.45 : 1);
           b.w += (CORNER_TORQUE * Rb * j0 * (nx * bfy - ny * bfx)) / (0.5 * mb * Rb * Rb) * (b.spec.stabilize ? 0.45 : 1);
           const cxp = a.x + nx * a.spec.radius, cyp = a.y + ny * a.spec.radius;
-          if (j0 > 900) {
-            events.push({ t: r3(t), type: 'hit', a: a.id, b: b.id, x: r1(cxp), y: r1(cyp), impulse: Math.round(j0), nx: r3(nx), ny: r3(ny) });
+          if (j0 > 900 && fresh) {
+            events.push({ t: r3(t), type: 'hit', a: a.id, b: b.id, x: r1(cxp), y: r1(cyp), impulse: Math.round(j0), nx: r3(nx), ny: r3(ny), combo });
             a.lastHitBy = b.id; a.lastHitAt = t; b.lastHitBy = a.id; b.lastHitAt = t;
           }
           knock(a, j0 / ma, t, aPlow);
@@ -382,6 +443,75 @@ export function runSegment(input: SegmentInput): SegmentResult {
             a.lastHitBy = b.id; a.lastHitAt = t;
             knock(a, (J + j0) / ma, t); knock(b, J / mb, t, true);
             events.push({ t: r3(t), type: 'bumper', id: b.id, target: a.id, x: r1(cxp), y: r1(cyp) });
+          }
+        }
+      }
+      // 로봇-왕관
+      if (crown) for (const r of robots) {
+        if (r.fallen) continue;
+        const dx = crown.x - r.x, dy = crown.y - r.y;
+        const d = Math.hypot(dx, dy); const minD = r.spec.radius + CROWN_R;
+        if (d >= minD || d === 0) continue;
+        const nx = dx / d, ny = dy / d;
+        const mr = r.spec.mass * (r.brakeUtil ? 2.2 : 1) * (r.braking ? 1.25 : 1);
+        const pen = minD - d; const tot = mr + CROWN_MASS;
+        r.x -= nx * pen * (CROWN_MASS / tot); r.y -= ny * pen * (CROWN_MASS / tot);
+        crown.x += nx * pen * (mr / tot); crown.y += ny * pen * (mr / tot);
+        const vn = (crown.vx - r.vx) * nx + (crown.vy - r.vy) * ny;
+        if (vn > 0) continue;
+        const pk = r.id + '|crown';
+        const fresh = -vn > COMBO_MIN_APPROACH && t - (pairLast.get(pk) ?? -9) > 0.12;
+        let combo = comboOf(r, t);
+        if (fresh) { pairLast.set(pk, t); combo = touch(r, 'crown', t); }
+        const e = Math.min(E_MAX, CROWN_E + COMBO_E_STEP * (combo - 1));
+        const j = (-(1 + e) * vn) / (1 / mr + 1 / CROWN_MASS);
+        r.vx -= (nx * j) / mr; r.vy -= (ny * j) / mr;
+        crown.vx += (nx * j) / CROWN_MASS; crown.vy += (ny * j) / CROWN_MASS;
+        const front = fwdX(r.angle) * nx + fwdY(r.angle) * ny > Math.cos(FRONT_CONE);
+        if (r.bumperArmed && !r.bumperUsed && front) {
+          r.bumperUsed = true;
+          const J = J_BUMPER * 0.4; // 가벼운 왕관에는 스프링 행정의 일부만 전달된다
+          crown.vx += (nx * J) / CROWN_MASS; crown.vy += (ny * J) / CROWN_MASS;
+          r.vx -= (nx * J) / mr; r.vy -= (ny * J) / mr;
+          events.push({ t: r3(t), type: 'bumper', id: r.id, target: 'crown', x: r1(r.x + nx * r.spec.radius), y: r1(r.y + ny * r.spec.radius) });
+        }
+        if (j > 500 && fresh) events.push({ t: r3(t), type: 'crownHit', id: r.id, x: r1(r.x + nx * r.spec.radius), y: r1(r.y + ny * r.spec.radius), impulse: Math.round(j), nx: r3(nx), ny: r3(ny), combo });
+        if (j / mr > 95) knock(r, j / mr, t);
+      }
+      }
+      // ---- 왕관: 벽·완충벽·낙하 구역 ----
+      if (crown) {
+        const bounce = (nx: number, ny: number) => {
+          const vn = crown.vx * nx + crown.vy * ny;
+          if (vn < 0) {
+            crown.vx -= (1 + CROWN_WALL_E) * vn * nx; crown.vy -= (1 + CROWN_WALL_E) * vn * ny;
+            if (-vn > 90) events.push({ t: r3(t), type: 'crownWall', x: r1(crown.x - nx * CROWN_R), y: r1(crown.y - ny * CROWN_R), impulse: Math.round(-vn * CROWN_MASS * (1 + CROWN_WALL_E)) });
+          }
+        };
+        if (crown.x - CROWN_R < minX) { crown.x = minX + CROWN_R; bounce(1, 0); }
+        if (crown.x + CROWN_R > maxX) { crown.x = maxX - CROWN_R; bounce(-1, 0); }
+        if (crown.y - CROWN_R < minY) { crown.y = minY + CROWN_R; bounce(0, 1); }
+        if (crown.y + CROWN_R > maxY) { crown.y = maxY - CROWN_R; bounce(0, -1); }
+        for (const b of arena.barriers) {
+          const hw = b.w / 2, hh = b.h / 2;
+          const qx = Math.max(b.x - hw, Math.min(b.x + hw, crown.x));
+          const qy = Math.max(b.y - hh, Math.min(b.y + hh, crown.y));
+          const dx = crown.x - qx, dy = crown.y - qy; const d = Math.hypot(dx, dy);
+          if (d >= CROWN_R) continue;
+          let nx: number, ny: number;
+          if (d > 1e-6) { nx = dx / d; ny = dy / d; } else {
+            const px = hw - Math.abs(crown.x - b.x), py = hh - Math.abs(crown.y - b.y);
+            if (px < py) { nx = Math.sign(crown.x - b.x) || 1; ny = 0; } else { nx = 0; ny = Math.sign(crown.y - b.y) || 1; }
+          }
+          crown.x = qx + nx * CROWN_R; crown.y = qy + ny * CROWN_R;
+          bounce(nx, ny);
+        }
+        for (const p of arena.pits) {
+          if (Math.hypot(crown.x - p.x, crown.y - p.y) < p.r - 6) {
+            // 왕관이 빠지면 정비 드론이 중앙에 다시 내려놓는다
+            crown.x = arena.crown.x; crown.y = arena.crown.y; crown.vx = 0; crown.vy = 0;
+            events.push({ t: r3(t), type: 'crownReset', x: r1(p.x), y: r1(p.y) });
+            break;
           }
         }
       }
@@ -458,7 +588,7 @@ export function runSegment(input: SegmentInput): SegmentResult {
   const tEnd = frame * DT;
   if (frame % KEYFRAME_EVERY !== 0) pushFrame(tEnd);
   // ---- 왕관 판정 ----
-  const inCrown = robots.filter((r) => !r.fallen && Math.hypot(r.x - arena.crown.x, r.y - arena.crown.y) < arena.crown.r);
+  const inCrown = crown ? robots.filter((r) => !r.fallen && Math.hypot(r.x - crown.x, r.y - crown.y) < CROWN_ZONE_R) : [];
   if (inCrown.length === 1) {
     events.push({ t: r3(tEnd), type: 'crown', id: inCrown[0].id, contested: [] });
     addScore(inCrown[0], SCORE.crownSole, 'crown', tEnd);
@@ -473,7 +603,8 @@ export function runSegment(input: SegmentInput): SegmentResult {
       fallen: r.fallen, padIndex: r.padIndex,
     };
   });
-  return { physicsVersion: PHYSICS_VERSION, duration: r3(tEnd), bodies, frames, events, robots: outRobots, capsules, scores };
+  const outCrown: CrownState | null = crown ? { x: crown.x, y: crown.y, vx: crown.vx * TURN_END_VELOCITY_KEEP, vy: crown.vy * TURN_END_VELOCITY_KEEP } : null;
+  return { physicsVersion: PHYSICS_VERSION, duration: r3(tEnd), bodies, frames, events, robots: outRobots, capsules, crown: outCrown, scores };
 }
 
 /** 낙하한 로봇을 다음 턴 시작 시 출발 패드로 복귀시킨다. 패드가 막혀 있으면 가장 가까운 빈 곳. */
@@ -497,6 +628,6 @@ export function respawnFallen(arena: ArenaDef, robots: RobotSimState[]): RobotSi
 
 /** 상대 명령이 공개되지 않은 상태에서의 내 예상 경로(점선용). 다른 로봇은 없는 것으로 계산. */
 export function previewPath(arena: ArenaDef, robot: RobotSimState, plan: Plan): { x: number; y: number }[] {
-  const res = runSegment({ arena, turn: 0, robots: [{ ...robot, fallen: false }], capsules: [], plans: { [robot.id]: plan }, seed: 1 });
+  const res = runSegment({ arena, turn: 0, robots: [{ ...robot, fallen: false }], capsules: [], plans: { [robot.id]: plan }, seed: 1, crown: null });
   return res.frames.filter((_, i) => i % 2 === 0).map((f) => ({ x: f.p[0], y: f.p[1] }));
 }

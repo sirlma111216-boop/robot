@@ -1,6 +1,6 @@
 // 경기장 캔버스 렌더러 — 서버 궤적(keyframe)을 보간 재생하고 부가 연출(스파크·먼지·링·자력·부스터)을 그린다.
 // 판정은 서버 결과만 사용하며 여기서는 위치를 바꾸지 않는다.
-import { ARENAS, ARENA_W, ARENA_H, TEAM_STYLES, deriveSpec, type ArenaDef, type SegmentResult, type SimEvent, type RobotBuild, type Plan, type RobotView } from '@scrap/core';
+import { ARENAS, ARENA_W, ARENA_H, TEAM_STYLES, CROWN_R, CROWN_ZONE_R, deriveSpec, type ArenaDef, type SegmentResult, type SimEvent, type RobotBuild, type Plan, type RobotView } from '@scrap/core';
 import { getImage, assetInfo } from '../assets/loader';
 import { drawRobot } from './RobotSprite';
 
@@ -38,6 +38,9 @@ export class ArenaRenderer {
   private dustTimer = new Map<string, number>();
   private shake = 0;
   private skidding = new Set<string>();
+  private crownPos = { x: ARENA_W / 2, y: ARENA_H / 2 };
+  private crownKick = 0; // 왕관이 맞았을 때 잠깐 커지는 연출
+  private tDisp = 0;
   private marks: { x: number; y: number; a: number; life: number }[] = [];
   private squash = new Map<string, { t: number; nx: number; ny: number; amt: number }>();
   private lag = 0; // 히트스톱으로 밀린 표시 시간(곧 따라잡는다 — 서버 시계는 멈추지 않음)
@@ -58,8 +61,9 @@ export class ArenaRenderer {
 
   setArena(id: string) { if (this.arena.id !== id) this.arena = ARENAS[id] ?? this.arena; }
   setTeams(teams: TeamInfo[]) { this.teams = new Map(teams.map((t) => [t.id, t])); }
-  setStatic(robots: RobotView[], capsules: { id: string; x: number; y: number; taken: boolean }[], preview: { x: number; y: number }[] | null) {
+  setStatic(robots: RobotView[], capsules: { id: string; x: number; y: number; taken: boolean }[], preview: { x: number; y: number }[] | null, crown?: { x: number; y: number } | null) {
     this.robots = robots; this.capsules = capsules; this.preview = preview;
+    this.crownPos = crown ? { x: crown.x, y: crown.y } : { x: this.arena.crown.x, y: this.arena.crown.y };
     if (this.segment && this.ended) { /* 재생 끝난 뒤 정적 상태로 복귀 */ this.segment = null; }
   }
   stop() { this.segment = null; this.fx = []; this.fallen.clear(); this.magnetOn.clear(); this.flame.clear(); this.bumper.clear(); }
@@ -96,6 +100,20 @@ export class ArenaRenderer {
   };
 
   private currentT(): number { return this.segment ? (this.serverNow() - this.startAt) / 1000 : 0; }
+
+  /** 궤적에서 왕관 위치를 보간해 읽는다 (없으면 null) */
+  private sampleCrown(tc: number): { x: number; y: number } | null {
+    const seg = this.segment; if (!seg) return null;
+    const ci = seg.bodies.findIndex((b) => b.kind === 'crown'); if (ci < 0) return null;
+    const nR = seg.bodies.filter((b) => b.kind === 'robot').length;
+    const o = nR * 3 + (ci - nR) * 2;
+    const frames = seg.frames; let i = 0; while (i < frames.length - 2 && frames[i + 1].t <= tc) i++;
+    const f0 = frames[i], f1 = frames[Math.min(i + 1, frames.length - 1)];
+    const span = f1.t - f0.t; const k = span > 0 ? Math.max(0, Math.min(1, (tc - f0.t) / span)) : 0;
+    // 재배치(순간 이동)는 보간하지 않는다
+    if (Math.hypot(f1.p[o] - f0.p[o], f1.p[o + 1] - f0.p[o + 1]) > 120) return { x: k < 0.5 ? f0.p[o] : f1.p[o], y: k < 0.5 ? f0.p[o + 1] : f1.p[o + 1] };
+    return { x: f0.p[o] + (f1.p[o] - f0.p[o]) * k, y: f0.p[o + 1] + (f1.p[o + 1] - f0.p[o + 1]) * k };
+  }
 
   private draw(dt: number) {
     const ctx = this.ctx; const A = this.arena;
@@ -134,13 +152,21 @@ export class ArenaRenderer {
       const team = [...this.teams.values()].find((t) => this.robotPad(t.id) === i);
       if (team) { ctx.save(); ctx.strokeStyle = TEAM_STYLES[team.styleIndex].color; ctx.lineWidth = 6; ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(pad.x, pad.y, 58, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
     });
-    // 왕관 영역
-    const cz = A.crown;
+    // 재생 중이면 표시 시간을 먼저 정한다(국소 히트스톱: 표시 시간만 잠깐 멈췄다가 빠르게 따라잡는다)
+    if (this.segment) {
+      if (this.freezeLeft > 0) { this.freezeLeft -= dt; this.lag = Math.min(0.25, this.lag + dt); } else if (this.lag > 0) this.lag = Math.max(0, this.lag - dt * 0.8);
+      this.tDisp = Math.max(0, this.currentT() - this.lag);
+      const c = this.sampleCrown(Math.min(this.tDisp, this.segment.duration)); if (c) this.crownPos = c;
+    }
+    // 왕관(움직이는 퍽)과 그 곁 구역
+    const cz = { x: this.crownPos.x, y: this.crownPos.y, r: CROWN_ZONE_R };
+    this.crownKick = Math.max(0, this.crownKick - dt * 3);
     ctx.save();
     ctx.fillStyle = 'rgba(255,200,60,0.07)'; ctx.beginPath(); ctx.arc(cz.x, cz.y, cz.r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,200,60,0.85)'; ctx.lineWidth = 5; ctx.setLineDash([26, 14]); ctx.lineDashOffset = -timeSec * 40; ctx.beginPath(); ctx.arc(cz.x, cz.y, cz.r, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
-    this.drawImg('PR-04', cz.x, cz.y + Math.sin(timeSec * 2) * 4, 96, 104, timeSec * 0.4);
+    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cz.x + 4, cz.y + 6, CROWN_R * 1.15, CROWN_R * 1.05, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    { const cs = CROWN_R * 2.5 * (1 + this.crownKick * 0.25); this.drawImg('PR-04', cz.x, cz.y, cs * 0.92, cs, timeSec * 0.6); }
     // 완충벽
     for (const br of A.barriers) this.drawImg('PR-01', br.x, br.y, br.angle === 90 ? br.h : br.w, br.angle === 90 ? br.w : br.h, br.angle === 90 ? Math.PI / 2 : 0, 1.12);
     // 본체
@@ -182,9 +208,7 @@ export class ArenaRenderer {
   // ---------- 재생 ----------
   private drawPlayback(dt: number, timeSec: number) {
     const seg = this.segment!;
-    // 국소 히트스톱: 표시 시간만 잠깐 멈췄다가 빠르게 따라잡는다
-    if (this.freezeLeft > 0) { this.freezeLeft -= dt; this.lag = Math.min(0.25, this.lag + dt); } else if (this.lag > 0) this.lag = Math.max(0, this.lag - dt * 0.8);
-    const t = Math.max(0, this.currentT() - this.lag);
+    const t = this.tDisp;
     const tc = Math.min(t, seg.duration);
     // 이벤트 처리
     while (this.eventCursor < seg.events.length && seg.events[this.eventCursor].t <= tc) this.handleEvent(seg.events[this.eventCursor++], t);
@@ -204,7 +228,7 @@ export class ArenaRenderer {
         const x = f0.p[o] + (f1.p[o] - f0.p[o]) * k, y = f0.p[o + 1] + (f1.p[o + 1] - f0.p[o + 1]) * k;
         let da = f1.p[o + 2] - f0.p[o + 2]; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
         positions.push({ id: body.id, x, y, a: f0.p[o + 2] + da * k });
-      } else {
+      } else if (body.kind === 'capsule') {
         const o = nR * 3 + (bi - nR) * 2;
         const x = f0.p[o], y = f0.p[o + 1];
         if (x > -500) this.drawCapsule(x, y, timeSec);
@@ -288,9 +312,30 @@ export class ArenaRenderer {
           this.squash.set(e.a, { t, nx: e.nx, ny: e.ny, amt }); this.squash.set(e.b, { t, nx: e.nx, ny: e.ny, amt });
           if (!this.reduceFx) { this.freezeLeft = Math.max(this.freezeLeft, 0.03 + k * 0.06); this.shake = Math.max(this.shake, 4 + k * 12); }
         }
+        if (e.combo >= 2) {
+          // 연쇄 충돌: 반발계수가 올라간 초탄성 충돌
+          this.fx.push({ kind: 'ring', x: e.x, y: e.y, rot: 0, scale: 0.5 + e.combo * 0.25, life: 0.5, max: 0.5 });
+          this.fx.push({ kind: 'text', x: e.x, y: e.y - 50, rot: 0, scale: 0.8 + e.combo * 0.12, life: 1.0, max: 1.0, text: `연쇄 ×${e.combo}!`, color: e.combo >= 3 ? '#ff7b54' : '#ffd25a' });
+          if (!this.reduceFx) { this.shake = Math.max(this.shake, 8 + e.combo * 4); this.freezeLeft = Math.max(this.freezeLeft, 0.05 + e.combo * 0.02); }
+        }
         break;
       }
       case 'skid': if (e.on) this.skidding.add(e.id); else this.skidding.delete(e.id); break;
+      case 'crownHit': {
+        const k = Math.min(1, e.impulse / 9000);
+        this.crownKick = 1;
+        this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.atan2(e.ny, e.nx) + Math.PI / 2 + (Math.random() - 0.5), scale: 0.4 + k * 0.5, life: 0.35, max: 0.35 });
+        this.fx.push({ kind: 'ring', x: e.x, y: e.y, rot: 0, scale: 0.18 + k * 0.3, life: 0.3, max: 0.3 });
+        if (!this.reduceFx) this.shake = Math.max(this.shake, 2 + k * 6);
+        break;
+      }
+      case 'crownWall': this.crownKick = 0.7; this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.random() * Math.PI * 2, scale: 0.45, life: 0.28, max: 0.28 }); break;
+      case 'crownReset': {
+        const c0 = this.arena.crown;
+        this.fx.push({ kind: 'glint', x: c0.x, y: c0.y, rot: 0, scale: 0.8, life: 0.7, max: 0.7 });
+        this.fx.push({ kind: 'text', x: e.x, y: e.y - 70, rot: 0, scale: 0.9, life: 1.6, max: 1.6, text: '왕관 추락! 중앙에 재배치', color: '#ffd25a' });
+        break;
+      }
       case 'wall': {
         const k = Math.min(1, e.impulse / 20000);
         this.fx.push({ kind: 'spark', x: e.x, y: e.y, rot: Math.atan2(e.ny, e.nx) + (Math.random() - 0.5), scale: 0.5 + k, life: 0.3, max: 0.3 });
@@ -310,7 +355,7 @@ export class ArenaRenderer {
       }
       case 'pickup': this.fx.push({ kind: 'glint', x: e.x, y: e.y, rot: 0, scale: 0.4, life: 0.5, max: 0.5 }); this.fx.push({ kind: 'text', x: e.x, y: e.y - 40, rot: 0, scale: 1, life: 1.1, max: 1.1, text: '+1', color: '#2fd7c8' }); break;
       case 'crown': {
-        const c = this.arena.crown;
+        const c = this.crownPos;
         if (e.id) this.fx.push({ kind: 'text', x: c.x, y: c.y - 130, rot: 0, scale: 1.3, life: 2.2, max: 2.2, text: `👑 ${teamName(e.id)} +3`, color: '#ffd25a' });
         else if (e.contested.length > 1) this.fx.push({ kind: 'text', x: c.x, y: c.y - 130, rot: 0, scale: 1.1, life: 2.2, max: 2.2, text: '왕관 경합! 0점', color: '#fff' });
         this.fx.push({ kind: 'ring', x: c.x, y: c.y, rot: 0, scale: 1.2, life: 0.8, max: 0.8, color: '#ffd25a' });

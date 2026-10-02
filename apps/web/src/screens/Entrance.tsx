@@ -3,7 +3,7 @@ import { Scene, Speaker } from '../ui/common';
 import { navigate, sessionStore } from '../App';
 import { preload, SCENE_ASSETS } from '../assets/loader';
 
-const TIPS = ['로봇을 만들고, 세 수를 읽어라.', '모두 동시에 움직인다. 상대가 어디로 갈지 읽어!', '왕관을 혼자 지키면 3점, 상대를 떨어뜨리면 2점.'];
+const TIPS = ['로봇을 만들고, 세 수를 읽어라.', '모두 동시에 움직인다. 상대가 어디로 갈지 읽어!', '튕겨 다니는 왕관 곁에 혼자 남으면 3점, 상대를 떨어뜨리면 2점.'];
 
 export function Entrance() {
   const [tip, setTip] = useState(0);

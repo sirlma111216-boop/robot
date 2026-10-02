@@ -1,7 +1,7 @@
 // 규칙 상수 — 시간과 점수는 데이터. 활성 게임은 시작 시점의 rulesVersion 을 고정한다.
-export const RULES_VERSION = 'r1';
+export const RULES_VERSION = 'r2';
 export const CONTENT_VERSION = 'c1';
-export const PHYSICS_VERSION = 'p2';
+export const PHYSICS_VERSION = 'p3';
 export const PROTOCOL_VERSION = 1;
 
 export interface TimingSettings {

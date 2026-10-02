@@ -1,6 +1,6 @@
 import type { RobotBuild } from '../content/parts';
 import type { Plan } from '../rules/commands';
-import type { RobotSimState, CapsuleState, SegmentResult } from '../physics/sim';
+import type { RobotSimState, CapsuleState, CrownState, SegmentResult } from '../physics/sim';
 import type { BotLevel } from '../bots/bot';
 
 export type Phase = 'LOBBY' | 'BUILD' | 'INTRO' | 'PLAN' | 'BATTLE' | 'PITSTOP' | 'PODIUM';
@@ -58,6 +58,7 @@ export interface MatchState {
   turn: number; // 1..TURNS_PER_MATCH, 0 = 아직 시작 전
   robots: RobotSimState[];
   capsules: CapsuleState[];
+  crown: CrownState;
   capsuleSeq: number;
   segmentId: string | null;
   startAt: number | null; // 전투 재생 시작 서버 시각(ms)
@@ -107,6 +108,7 @@ export interface MatchView {
   index: number; arenaId: string; turn: number; totalTurns: number;
   robots: RobotView[];
   capsules: { id: string; x: number; y: number; taken: boolean }[];
+  crown: { x: number; y: number };
   segmentId: string | null; startAt: number | null;
   revealedPlans: Record<string, Plan>;
   turnScores: Record<string, number>;

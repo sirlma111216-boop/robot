@@ -97,7 +97,7 @@ export function Build(props: ScreenProps) {
           {arena && <div className="col" style={{ gap: 2 }}><strong>다음 경기장: {arena.name}</strong><span className="small muted">{arena.subtitle}</span><span className="small muted">낙하 구역 {arena.pits.length}곳{arena.conveyors.length ? ` · 컨베이어 ${arena.conveyors.length}` : ''}{arena.slick.length ? ` · 미끄럼 바닥 ${arena.slick.length}` : ''}</span></div>}
           <div className="divider" />
           <strong>규칙 한눈에</strong>
-          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}><li>전투 끝에 왕관 원 안에 혼자 있으면 <b style={{ color: 'var(--amber)' }}>3점</b></li><li>상대를 낙하 구역에 밀어 넣으면 <b style={{ color: 'var(--amber)' }}>2점</b></li><li>고철 캡슐 줍기 <b style={{ color: 'var(--amber)' }}>1점</b></li><li>떨어져도 다음 턴에 복귀. 탈락 없음</li></ul>
+          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}><li>전투 끝에 <b>왕관 곁(노란 원)</b>에 혼자 있으면 <b style={{ color: 'var(--amber)' }}>3점</b></li><li>왕관은 부딪히면 튕겨 나간다. 밀고, 쏘고, 자석으로 끌어라</li><li>여러 대가 연달아 부딪히면 <b>연쇄</b>로 더 세게 튕긴다</li><li>상대를 낙하 구역에 밀어 넣으면 <b style={{ color: 'var(--amber)' }}>2점</b></li><li>고철 캡슐 줍기 <b style={{ color: 'var(--amber)' }}>1점</b></li><li>떨어져도 다음 턴에 복귀. 탈락 없음</li></ul>
           <div className="divider" />
           <div className="small muted">팀원: {team.members.map((m) => m.nick).join(', ') || '없음'}</div>
           <div style={{ marginTop: 'auto' }}>
