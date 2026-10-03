@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Scene, TopBar } from '../ui/common';
 import { navigate, sessionStore } from '../App';
-import { NICK_MAX } from '@scrap/core';
+import { NICK_MAX, josa } from '@scrap/core';
 
 export function Join({ code: initialCode }: { code: string }) {
   const [code, setCode] = useState(initialCode.toUpperCase());
   const [nick, setNick] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const saved = sessionStore.get();
+  const sameClass = !!saved && saved.code === code.trim().toUpperCase();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setBusy(true);
@@ -31,6 +33,7 @@ export function Join({ code: initialCode }: { code: string }) {
           <p className="muted small">선생님이 보여준 코드 또는 QR로 들어와요. 로그인은 필요 없어요.</p>
           <label className="col" style={{ gap: 4 }}><span className="small muted">클래스 코드</span><input className="input" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="예: K7S2TD" maxLength={8} autoCapitalize="characters" autoComplete="off" required style={{ letterSpacing: '0.2em', fontWeight: 800, fontSize: 20 }} /></label>
           <label className="col" style={{ gap: 4 }}><span className="small muted">닉네임 (최대 {NICK_MAX}자)</span><input className="input" value={nick} onChange={(e) => setNick(e.target.value)} placeholder="예: 번개민지" maxLength={NICK_MAX} required autoFocus /></label>
+          {sameClass && <div className="panel tight col" style={{ gap: 6, borderColor: 'var(--teal)' }}><span className="small">이 클래스에 <strong>{saved!.nick}</strong>{josa(saved!.nick, '으로', '로').slice(saved!.nick.length)} 이미 들어와 있어요. 새로 입장하면 다른 자리가 하나 더 생겨요.</span><button type="button" className="btn teal" onClick={() => navigate('/play')}>{josa(saved!.nick, '으로', '로')} 이어서 참가</button></div>}
           {error && <div className="tag danger">{error}</div>}
           <button className="btn primary big" type="submit" disabled={busy || !code || !nick.trim()}>{busy ? '입장 중…' : '입장하기'}</button>
         </form>

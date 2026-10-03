@@ -60,21 +60,26 @@ function TeacherHome() {
   };
   const open = (c: string) => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    setClient(new GameClient(new NetworkTransport(`${proto}://${location.host}/ws/${c}`)));
+    setClient((prev) => { prev?.destroy(); return new GameClient(new NetworkTransport(`${proto}://${location.host}/ws/${c}`)); });
   };
+  // 관제실을 떠나면(뒤로가기 포함) 교사 소켓을 닫는다
+  useEffect(() => () => { client?.destroy(); }, [client]);
   const resume = async (c: string) => {
-    const info = await fetch(`/api/class/${c}`).then((r) => r.json()).catch(() => ({ ok: false }));
-    if (!info.ok) { setError('그 코드의 클래스는 이미 종료됐어요. 새로 만들어요.'); try { localStorage.removeItem(LAST_KEY); } catch { /* noop */ } setCode(null); return; }
+    setError('');
+    let res: Response;
+    try { res = await fetch(`/api/class/${c}`); } catch { setError('서버에 연결할 수 없어요. 인터넷 연결을 확인해요.'); return; }
+    if (res.status === 404) { setError('그 코드의 클래스는 없거나 이미 정리됐어요. 새로 만들어요.'); try { localStorage.removeItem(LAST_KEY); } catch { /* noop */ } setCode(null); return; }
+    if (!res.ok) { setError('지금은 클래스를 열 수 없어요. 잠시 후 다시 해요.'); return; }
     try { localStorage.setItem(LAST_KEY, c); } catch { /* noop */ }
     setCode(c); open(c);
   };
-  const flow = useMemo(() => client && code ? <GameFlow client={client} mode="teacher" onExit={() => { client.destroy(); setClient(null); }} /> : null, [client, code]);
+  const flow = useMemo(() => client && code ? <GameFlow client={client} mode="teacher" onExit={() => setClient(null)} /> : null, [client, code]);
   if (flow) return flow;
   const joinUrl = code ? `${location.origin}/join?code=${code}` : '';
   return (
     <Scene bg="BG-08">
       <TopBar title="교사 관제실" sub="클래스 만들기">
-        <button className="btn ghost small" onClick={async () => { await fetch('/api/teacher/logout', { method: 'POST' }); navigate('/'); }}>로그아웃</button>
+        <button className="btn ghost small" onClick={async () => { try { await fetch('/api/teacher/logout', { method: 'POST' }); } catch { /* 오프라인이어도 화면은 나간다 */ } navigate('/'); }}>로그아웃</button>
       </TopBar>
       <div className="center">
         <div className="panel col" style={{ width: 'min(760px, 100%)', gap: 14 }}>
@@ -95,7 +100,7 @@ function TeacherHome() {
           ) : (
             <>
               <h2>새 클래스 만들기</h2>
-              <p className="muted small">클래스 하나에 학생 최대 30명, 팀 최대 6개. 코드는 24시간 뒤 자동으로 정리돼요.</p>
+              <p className="muted small">클래스 하나에 학생 최대 30명, 팀 최대 6개. 마지막 활동 후 24시간이 지나면 자동으로 정리돼요.</p>
               <button className="btn primary big" onClick={create} disabled={busy}>{busy ? '만드는 중…' : '클래스 만들기'}</button>
               <div className="divider" />
               <div className="row"><input className="input" style={{ flex: 1 }} placeholder="기존 클래스 코드로 열기" value={manual} onChange={(e) => setManual(e.target.value.toUpperCase())} maxLength={8} /><button className="btn" onClick={() => manual && resume(manual)}>열기</button></div>

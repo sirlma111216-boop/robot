@@ -26,6 +26,7 @@ export class ClassSessionDO extends DurableObject<Env> {
   private loaded = false;
   private rate = new Map<WebSocket, { n: number; at: number }>();
   private broadcastScheduled = false;
+  private joinTimes: number[] = [];
   private savedSegKey = '';
 
   private async ensureLoaded() {
@@ -71,7 +72,8 @@ export class ClassSessionDO extends DurableObject<Env> {
     const now = Date.now();
 
     if (path === '/init' && request.method === 'POST') {
-      const body = await request.json<{ code: string }>();
+      const body = await request.json<{ code: string }>().catch(() => ({ code: '' }));
+      if (!body.code) return Response.json({ ok: false, error: '잘못된 요청이에요.' }, { status: 400 });
       if (!this.host) {
         this.host = new ClassHost({ code: body.code, now, seed: (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0), teacherId: TEACHER_ID });
         await this.save();
@@ -85,7 +87,11 @@ export class ClassSessionDO extends DurableObject<Env> {
       return Response.json({ ok: true, code: st.code, phase: st.phase, locked: st.locked, students: this.host.studentCount, teams: st.teamOrder.length });
     }
     if (path === '/join' && request.method === 'POST') {
-      const body = await request.json<{ nick?: string }>();
+      // 짧은 시간에 입장이 몰리면(스크립트 등) 잠깐 막는다. 한 반 30명이 동시에 들어오는 정도는 통과
+      this.joinTimes = this.joinTimes.filter((t) => now - t < 10_000);
+      if (this.joinTimes.length >= 40) return Response.json({ ok: false, error: '입장이 몰리고 있어요. 잠시 후 다시 시도해요.' }, { status: 429 });
+      this.joinTimes.push(now);
+      const body = await request.json<{ nick?: string }>().catch(() => ({} as { nick?: string }));
       const nick = nicknameSchema.safeParse(body.nick);
       if (!nick.success) return Response.json({ ok: false, error: nick.error.issues[0]?.message ?? '닉네임을 확인해요' }, { status: 400 });
       const r = this.host.joinStudent(nick.data, now);
@@ -107,6 +113,9 @@ export class ClassSessionDO extends DurableObject<Env> {
         playerId = this.tokens[token] ?? null;
         if (!playerId || !this.host.state.players[playerId]) return Response.json({ ok: false, error: '입장 정보가 만료됐어요. 다시 입장해요.' }, { status: 401 });
       }
+      // 한 사람이 소켓을 여러 개 열면 가장 오래된 것부터 닫는다(탭 여러 개·재접속 잔여 정리)
+      const mine = this.ctx.getWebSockets().filter((w) => (w.deserializeAttachment() as Attachment | null)?.playerId === playerId);
+      for (const old of mine.slice(0, Math.max(0, mine.length - 2))) { try { old.close(4004, 'replaced'); } catch { /* noop */ } }
       const pair = new WebSocketPair();
       const [client, server] = [pair[0], pair[1]];
       const att: Attachment = { playerId, role: isTeacher ? 'teacher' : 'student' };
@@ -132,16 +141,16 @@ export class ClassSessionDO extends DurableObject<Env> {
     if (!this.host) { ws.close(4001, 'no class'); return; }
     const att = ws.deserializeAttachment() as Attachment | null;
     if (!att) { ws.close(4002, 'no attachment'); return; }
-    if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_BYTES) { this.send(ws, { t: 'error', error: '메시지가 너무 커요' }); return; }
+    if (typeof raw !== 'string' || raw.length > MAX_MESSAGE_BYTES) { this.send(ws, { t: 'error', error: '메시지가 너무 커요.' }); return; }
     // 빈도 제한
     const now = Date.now();
     const r = this.rate.get(ws) ?? { n: 0, at: now };
     if (now - r.at > 10_000) { r.n = 0; r.at = now; }
     r.n++; this.rate.set(ws, r);
-    if (r.n > RATE_LIMIT_PER_10S) { this.send(ws, { t: 'error', error: '너무 빨라요. 잠깐만요.' }); return; }
+    if (r.n > RATE_LIMIT_PER_10S) { this.send(ws, { t: 'error', error: '너무 빨리 보내고 있어요. 잠깐 기다려요.' }); return; }
 
     let json: unknown;
-    try { json = JSON.parse(raw); } catch { this.send(ws, { t: 'error', error: '잘못된 메시지' }); return; }
+    try { json = JSON.parse(raw); } catch { this.send(ws, { t: 'error', error: '잘못된 메시지예요.' }); return; }
     const parsed = parseClientMessage(json);
     if (!parsed.ok) { this.send(ws, { t: 'error', error: parsed.error }); return; }
     const msg = parsed.msg;

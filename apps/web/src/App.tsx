@@ -14,10 +14,18 @@ export function usePath(): string {
   return path;
 }
 
-export interface StudentSession { code: string; token: string; playerId: string; nick: string }
+export interface StudentSession { code: string; token: string; playerId: string; nick: string; savedAt?: number }
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 클래스 보관 기간과 같게: 공용 PC 에서 오래된 자리로 들어가지 않게
 export const sessionStore = {
-  get(): StudentSession | null { try { const s = localStorage.getItem('sc:session'); return s ? JSON.parse(s) : null; } catch { return null; } },
-  set(s: StudentSession | null) { try { if (s) localStorage.setItem('sc:session', JSON.stringify(s)); else localStorage.removeItem('sc:session'); } catch { /* noop */ } },
+  get(): StudentSession | null {
+    try {
+      const raw = localStorage.getItem('sc:session'); if (!raw) return null;
+      const s = JSON.parse(raw) as StudentSession;
+      if (!s.savedAt || Date.now() - s.savedAt > SESSION_TTL_MS) { localStorage.removeItem('sc:session'); return null; }
+      return s;
+    } catch { return null; }
+  },
+  set(s: StudentSession | null) { try { if (s) localStorage.setItem('sc:session', JSON.stringify({ ...s, savedAt: Date.now() })); else localStorage.removeItem('sc:session'); } catch { /* noop */ } },
 };
 
 export function App() {

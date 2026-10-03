@@ -4,7 +4,10 @@ import { COMMAND_IDS } from '../rules/commands';
 
 export const NICK_MIN = 1;
 export const NICK_MAX = 10;
-export const nicknameSchema = z.string().trim().min(NICK_MIN, '닉네임을 입력해요').max(NICK_MAX, `닉네임은 ${NICK_MAX}자까지예요`).regex(/^[^<>"'`\\]+$/, '사용할 수 없는 문자가 있어요');
+// 보이지 않는 문자·방향 제어 문자(사칭에 쓰일 수 있음)와 HTML 특수문자를 막는다
+const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029\u3164\u115f\u1160]/u;
+export const nicknameSchema = z.string({ error: '닉네임을 입력해요' }).trim().min(NICK_MIN, '닉네임을 입력해요').max(NICK_MAX, `닉네임은 ${NICK_MAX}자까지예요`).regex(/^[^<>"'`\\]+$/, '사용할 수 없는 문자가 있어요').refine((s) => !INVISIBLE.test(s), '보이지 않는 문자는 쓸 수 없어요');
+export const teamNameSchema = z.string({ error: '팀 이름을 입력해요' }).trim().min(1, '팀 이름을 입력해요').max(12, '팀 이름은 12자까지예요').regex(/^[^<>"'`\\]+$/, '사용할 수 없는 문자가 있어요').refine((s) => !INVISIBLE.test(s), '보이지 않는 문자는 쓸 수 없어요');
 
 export const buildSchema = z.object({
   chassis: z.string().max(8),
@@ -31,7 +34,7 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('unlockPlan') }),
   z.object({ t: z.literal('emote'), emote: z.enum(EMOTES) }),
   z.object({ t: z.literal('getSegment'), segmentId: z.string().max(32) }),
-  z.object({ t: z.literal('renameTeam'), name: z.string().trim().min(1).max(12) }),
+  z.object({ t: z.literal('renameTeam'), name: teamNameSchema }),
   // ---- 교사 전용 ----
   z.object({ t: z.literal('teacher:setSettings'), settings: z.object({
     matches: z.union([z.literal(1), z.literal(3)]).optional(),

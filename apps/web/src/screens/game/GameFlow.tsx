@@ -54,6 +54,7 @@ export function GameFlow({ client, mode, onExit }: { client: GameClient; mode: M
           {consoleOpen && <TeacherConsole {...props} drawer onClose={() => setConsoleOpen(false)} />}
         </>
       )}
+      {mode === 'solo' && view.phase !== 'LOBBY' && view.phase !== 'PODIUM' && <button className="btn small ghost" style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 12, background: 'rgba(5,10,20,0.75)' }} onClick={() => { if (window.confirm('연습을 끝내고 나갈까요?')) onExit(); }}>연습 끝내기</button>}
       {!state.connected && client.transport.kind === 'network' && <div className="tag danger" style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 12 }}>연결 끊김 · 다시 연결 중…</div>}
       <Toasts toasts={state.toasts} />
     </div>

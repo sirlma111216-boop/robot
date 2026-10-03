@@ -29,6 +29,12 @@ export async function verifyTeacherToken(secret: string, token: string | null | 
   } catch { return false; }
 }
 
+/** 길이가 달라도 시간 차가 생기지 않도록 양쪽을 SHA-256 으로 줄인 뒤 비교한다 */
+export async function safeEqual(a: string, b: string): Promise<boolean> {
+  const [ha, hb] = await Promise.all([crypto.subtle.digest('SHA-256', enc.encode(a)), crypto.subtle.digest('SHA-256', enc.encode(b))]);
+  return timingSafeEqual(b64url(ha), b64url(hb));
+}
+
 export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let r = 0;

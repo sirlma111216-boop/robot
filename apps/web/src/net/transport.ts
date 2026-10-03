@@ -25,14 +25,29 @@ export class NetworkTransport implements Transport {
   private closed = false;
   private retry = 0;
   private pingTimer: number | null = null;
+  private failStreak = 0; // 열리기 전에 닫힌 연속 횟수
 
   constructor(private url: string) { this.connect(); }
+
+  /** 연결이 계속 거부되면 클래스가 사라졌거나 입장 정보가 무효인지 HTTP 로 확인한다 */
+  private async checkGone(): Promise<boolean> {
+    try {
+      const u = new URL(this.url.replace(/^ws/, 'http'));
+      const code = u.pathname.split('/').pop();
+      const r = await fetch(`${u.origin}/api/class/${code}`);
+      if (r.status === 404) return true;
+      // 클래스는 있는데 계속 거부되면 학생 토큰이 무효(내보내기 등)
+      return r.ok && u.searchParams.has('token') && this.failStreak >= 4;
+    } catch { return false; }
+  }
 
   private connect() {
     if (this.closed) return;
     const ws = new WebSocket(this.url);
     this.ws = ws;
+    let opened = false;
     ws.onopen = () => {
+      opened = true; this.failStreak = 0;
       this.retry = 0;
       this.emit({ t: 'conn', connected: true });
       ws.send(JSON.stringify({ t: 'hello' }));
@@ -43,9 +58,14 @@ export class NetworkTransport implements Transport {
     ws.onclose = (ev) => {
       if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null; }
       this.emit({ t: 'conn', connected: false, reason: ev.reason });
-      if (this.closed || ev.code === 4003 || ev.code === 4000) return;
+      if (this.closed) return;
+      if (ev.code === 4003 || ev.code === 4000) { this.emit({ t: 'kicked' }); return; }
+      if (ev.code === 4004) return; // 같은 사람이 새 탭에서 접속함
+      if (!opened) this.failStreak++;
       const delay = Math.min(8000, 500 * 2 ** this.retry++);
-      setTimeout(() => this.connect(), delay);
+      const retry = () => setTimeout(() => this.connect(), delay);
+      if (this.failStreak >= 2) this.checkGone().then((gone) => { if (gone) { this.closed = true; this.emit({ t: 'kicked' }); } else retry(); });
+      else retry();
     };
     ws.onerror = () => { /* onclose 가 처리 */ };
   }
@@ -96,7 +116,16 @@ export class LocalTransport implements Transport {
     const wake = this.host.nextWakeAt();
     if (wake === null) return;
     const delay = Math.max(0, (wake - this.now()) / this.speed);
-    this.timer = window.setTimeout(() => { this.timer = null; if (this.host.tick(this.now())) this.flush(); else this.schedule(); }, delay);
+    this.timer = window.setTimeout(() => {
+      this.timer = null;
+      const t0 = this.now();
+      if (this.host.tick(t0)) {
+        // 봇 계산에 걸린 시간만큼 계획 시간을 돌려준다(솔로는 브라우저가 직접 계산하므로)
+        const spent = this.now() - t0;
+        if (spent > 30 && this.host.state.phase === 'PLAN' && this.host.state.deadline !== null) this.host.state.deadline += spent;
+        this.flush();
+      } else this.schedule();
+    }, delay);
   }
   send(msg: ClientMessage) {
     const now = this.now();

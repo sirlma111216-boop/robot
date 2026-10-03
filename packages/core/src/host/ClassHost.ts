@@ -28,6 +28,7 @@ export class ClassHost {
   private effects: HostEffect[] = [];
   private idCounter = 0;
   private random: () => number;
+  private emoteAt = new Map<string, number>(); // 이모트 쿨다운(메모리만, 재시작 시 초기화돼도 무방)
 
   constructor(init: ClassState | HostOptions) {
     if ('players' in init) this.state = init;
@@ -169,6 +170,8 @@ export class ClassHost {
       }
       case 'emote': {
         if (!team) return { ok: false, error: '팀에 먼저 들어가요.' };
+        if (now - (this.emoteAt.get(playerId) ?? 0) < 3000) return { ok: false, error: '이모트는 3초에 한 번만 보낼 수 있어요.' };
+        this.emoteAt.set(playerId, now);
         team.emote = { emote: msg.emote, from: p.nick, at: now };
         this.effects.push({ type: 'emote', teamId: team.id, from: p.nick, emote: msg.emote });
         return { ok: true };

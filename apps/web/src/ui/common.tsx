@@ -35,7 +35,7 @@ export function Timer({ deadline, serverNow, total }: { deadline: number | null;
   const sec = Math.ceil(remain / 1000);
   const pct = total ? Math.min(100, (remain / (total * 1000)) * 100) : 100;
   return (
-    <div className={`timer ${sec <= 5 ? 'urgent' : ''}`} aria-live="polite" aria-label={`남은 시간 ${sec}초`}>
+    <div className={`timer ${sec <= 5 ? 'urgent' : ''}`} role="timer" aria-label={`남은 시간 ${sec}초`}>
       <span>⏱ {sec}초</span>
       {total ? <span className="bar"><div style={{ width: `${pct}%` }} /></span> : null}
     </div>
@@ -50,9 +50,9 @@ export function Speaker({ who, image, text, style, onSkip }: { who: string; imag
   const [url, setUrl] = useState('');
   useEffect(() => { loadImage(image).then(() => setUrl(assetUrl(image))).catch(() => {}); }, [image]);
   return (
-    <div className="speaker" style={style} onClick={onSkip} role={onSkip ? 'button' : undefined}>
+    <div className="speaker" style={style} onClick={onSkip} role={onSkip ? 'button' : undefined} tabIndex={onSkip ? 0 : undefined} aria-label={onSkip ? `${who}: ${text} (눌러서 닫기)` : undefined} onKeyDown={onSkip ? (e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { e.preventDefault(); onSkip(); } } : undefined}>
       {url && <img src={url} alt={who} style={{ animation: 'bob 3s ease-in-out infinite' }} />}
-      <div className="bubble"><div className="who">{who}</div>{text}{onSkip && <div className="small" style={{ color: '#9aa3b5', marginTop: 4 }}>탭하여 건너뛰기</div>}</div>
+      <div className="bubble"><div className="who">{who}</div>{text}{onSkip && <div className="small" style={{ color: '#9aa3b5', marginTop: 4 }}>눌러서 닫기</div>}</div>
       <style>{`@keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }`}</style>
     </div>
   );
@@ -118,12 +118,12 @@ export function CommandCard({ id, build, onClick, disabled, selected }: { id: Co
       title={unusable ? c.reason : COMMAND_CARDS[id].hint} aria-label={`${label} ${unusable ? c.reason : `에너지 ${c.cost}`}`} style={selected ? { borderColor: '#ffb84d' } : undefined}>
       <CommandIcon id={id} build={build} />
       <span>{label}</span>
-      <span className="cost">{unusable ? '사용 불가' : `⚡${c.cost}`}</span>
+      <span className="cost">{unusable ? ('passive' in c && c.passive ? '항상 작동' : '사용 불가') : `⚡${c.cost}`}</span>
     </button>
   );
 }
 
-export function RobotPreview({ build, styleIndex, number, size = 220, angle = 0 }: { build: RobotBuild; styleIndex: number; number: number; size?: number; angle?: number }) {
+export function RobotPreview({ build, styleIndex, number, size = 220, angle = 0, label }: { build: RobotBuild; styleIndex: number; number: number; size?: number; angle?: number; label?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const key = JSON.stringify(build);
   useEffect(() => {
@@ -131,7 +131,7 @@ export function RobotPreview({ build, styleIndex, number, size = 220, angle = 0 
     preload([build.chassis, build.drive, build.front, ...build.utilities]).then(() => { if (alive && ref.current) renderRobotPreview(ref.current, build, styleIndex, number, angle); });
     return () => { alive = false; };
   }, [key, styleIndex, number, angle, size]);
-  return <canvas ref={ref} style={{ width: size, height: size }} aria-label="내 로봇 미리보기" />;
+  return <canvas ref={ref} style={{ width: size, height: size }} role="img" aria-label={label ?? `${number}번 팀 로봇: ${[build.chassis, build.drive, build.front, ...build.utilities].map((id) => ALL_PARTS[id]?.name).filter(Boolean).join(', ')}`} />;
 }
 
 export function QR({ text, size = 200 }: { text: string; size?: number }) {
@@ -144,12 +144,7 @@ export function RotateHint() {
   return <div className="rotate-hint">📱 화면을 가로로 돌려주세요.<br />경기장은 가로 화면에서 보여요.</div>;
 }
 
-/** 받침에 따라 조사를 고른다. 한글이 아니면 '이(가)' 꼴로 병기 */
-export function josa(word: string, withBatchim: string, without: string): string {
-  const code = word.charCodeAt(word.length - 1);
-  if (code < 0xac00 || code > 0xd7a3) return `${word}${withBatchim}(${without})`;
-  return word + ((code - 0xac00) % 28 !== 0 ? withBatchim : without);
-}
+export { josa } from '@scrap/core';
 
 export function useNow(intervalMs = 500): number {
   const [now, setNow] = useState(Date.now());

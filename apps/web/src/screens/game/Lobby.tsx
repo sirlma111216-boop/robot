@@ -22,13 +22,13 @@ export function Lobby(props: ScreenProps) {
     <Scene bg="BG-02">
       <TopBar title="클래스 격납고" sub={`코드 ${view.code}`}>
         <span className="tag">{me.nick}{me.isLeader ? ' ★ 팀장' : ''}</span>
-        <button className="btn ghost small" onClick={onExit}>나가기</button>
+        <button className="btn ghost small" onClick={() => { if (window.confirm(`클래스에서 나갈까요?${me.isLeader ? ' 팀장 자리가 비게 돼요.' : ''} 다시 들어오면 새 자리로 입장해요.`)) onExit(); }}>나가기</button>
       </TopBar>
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 16px 90px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         <div className="panel tight" style={{ textAlign: 'center' }}>
           {view.teams.length === 0 ? <><strong>선생님이 팀장을 정하는 중이에요.</strong><div className="small muted">팀장이 정해지면 격납고 문이 열려요.</div></>
             : myTeam ? <><strong>{myTeam.name} 팀에 들어왔어요.</strong><div className="small muted">{me.isLeader ? '팀장은 조립과 명령 확정을 맡아요. 팀원들의 추천과 제안을 잘 들어 보세요!' : '팀원은 부품을 추천하고 명령안을 제안해요. 팀장이 최종 확정!'} 선생님이 시작하면 조립이 시작돼요.</div></>
-              : <><strong>들어갈 팀을 고르세요.</strong><div className="small muted">문을 눌러 팀에 들어가요. 정원: 팀당 {view.settings.maxTeamSize}명</div></>}
+              : <><strong>들어갈 팀을 고르세요.</strong><div className="small muted">'이 팀에 들어가기'를 눌러요. 정원: 팀당 {view.settings.maxTeamSize}명</div></>}
         </div>
         <div className="hangar-grid">
           {view.teams.map((t) => {
@@ -48,7 +48,7 @@ export function Lobby(props: ScreenProps) {
                   {mine && !me.isLeader && <button className="btn small ghost" onClick={() => client.send({ t: 'leaveTeam' })}>팀 나가기</button>}
                   {mine && me.isLeader && (
                     <form className="row" onSubmit={(e) => { e.preventDefault(); if (rename.trim()) { client.send({ t: 'renameTeam', name: rename.trim() }); setRename(''); } }}>
-                      <input className="input" style={{ width: 120, minHeight: 34 }} placeholder="팀 이름 바꾸기" value={rename} onChange={(e) => setRename(e.target.value)} maxLength={12} /><button className="btn small" type="submit">✔</button>
+                      <input className="input" style={{ width: 120, minHeight: 34 }} aria-label="팀 이름" placeholder="팀 이름 바꾸기" value={rename} onChange={(e) => setRename(e.target.value)} maxLength={12} /><button className="btn small" type="submit" aria-label="팀 이름 저장">✔</button>
                     </form>
                   )}
                 </div>

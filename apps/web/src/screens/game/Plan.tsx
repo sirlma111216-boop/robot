@@ -16,7 +16,11 @@ export function Plan({ client, view }: ScreenProps) {
   const [sel, setSel] = useState<number>(0);
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [tipShown, setTipShown] = useState(() => { try { return localStorage.getItem('sc:tip:plan') !== '1'; } catch { return true; } });
-  useEffect(() => { setSlots([null, null, null]); setSel(0); }, [m.turn, m.index]);
+  // 새 턴이면 비우되, 새로고침·재접속이면 서버에 저장된 내 배치(제안)를 되살린다
+  useEffect(() => {
+    const mine = team?.proposals?.find((q) => q.by === view.me?.playerId);
+    setSlots(mine ? [...mine.plan] : [null, null, null]); setSel(0);
+  }, [m.turn, m.index]);
   const teams = useMemo(() => teamInfosFromView(view.teams), [view.teams]);
   const myRobot = team ? m.robots.find((r) => r.teamId === team.id) : null;
   const build = team?.build;
@@ -52,6 +56,10 @@ export function Plan({ client, view }: ScreenProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!build || locked) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return; // 입력 중에는 단축키 끔
+      if (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return; // 포커스된 버튼은 원래 동작대로
       const map: Record<string, CommandId> = { ArrowUp: 'FWD', ArrowDown: 'BACK', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ' ': 'BRAKE', f: 'FRONT', q: 'UTIL_A', w: 'UTIL_B', '.': 'WAIT' };
       const c = map[e.key]; if (c && commandCost(c, build).cost !== null) { e.preventDefault(); pick(c); }
       if (e.key === 'Backspace') clearSlot(sel);
@@ -76,7 +84,7 @@ export function Plan({ client, view }: ScreenProps) {
           <div className="panel col" style={{ width: 400, gap: 10, overflow: 'auto' }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div className="row"><TeamBadge styleIndex={team.styleIndex} /><strong>{team.name}</strong></div>
-              <span className="tag warn">⚡ {energy - (locked ? 0 : cost)} / {energy}</span>
+              <span className="tag warn">⚡ {energy - (locked ? planCost(locked, build) : cost)} / {energy}</span>
             </div>
             <div className="row" style={{ justifyContent: 'center', gap: 8 }} role="group" aria-label="명령 슬롯">
               {(locked ?? slots).map((c, i) => (
@@ -88,7 +96,7 @@ export function Plan({ client, view }: ScreenProps) {
             </div>
             {locked ? (
               <div className="col" style={{ gap: 6, alignItems: 'center' }}>
-                <span className="tag ok">🔒 명령 확정됨 · 친구 팀 기다리는 중</span>
+                <span className="tag ok">🔒 명령 확정됨 · 다른 팀을 기다리는 중</span>
                 {isLeader && <button className="btn small ghost" onClick={() => client.send({ t: 'unlockPlan' })}>수정하기</button>}
               </div>
             ) : (
@@ -103,7 +111,7 @@ export function Plan({ client, view }: ScreenProps) {
                   <button className="btn teal big block" disabled={!filled || !validity.ok} onClick={() => { client.send({ t: 'proposePlan', plan: draft }); client.toast('팀장에게 제안했어요'); }}>팀장에게 제안하기</button>
                 )}
                 {isLeader && filled && validity.ok && <div className="small" style={{ textAlign: 'center', color: 'var(--teal)' }}>확정을 안 눌러도 마감 때 이 배치로 진행돼요. 확정하면 더 빨리 시작!</div>}
-                <div className="small muted" style={{ textAlign: 'center' }}>키보드: ↑↓←→ 이동 · 스페이스 제동 · F 전면 · Q/W 보조 · Backspace 지우기{isLeader ? ' · Enter 확정' : ''}</div>
+                <div className="small muted" style={{ textAlign: 'center' }}>키보드: ↑ 전진 · ↓ 후진 · ←→ 회전 · 스페이스 제동 · F 전면 · Q/W 보조 · . 대기 · Backspace 지우기{isLeader ? ' · Enter 확정' : ''}</div>
               </>
             )}
             {team.proposals && team.proposals.filter((q) => q.by !== view.me!.playerId).length > 0 && (

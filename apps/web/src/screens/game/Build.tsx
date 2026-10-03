@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ALL_PARTS, CHASSIS, DRIVES, FRONTS, UTILITIES, PRESETS, MASS_BUDGET, ARENAS, buildMass, validateBuild, deriveSpec, type RobotBuild, type PartKind } from '@scrap/core';
-import { Scene, TopBar, Timer, Speaker, PartCard, RobotPreview, TeamBadge } from '../../ui/common';
+import { Scene, TopBar, Timer, Speaker, PartCard, RobotPreview, TeamBadge, josa } from '../../ui/common';
 import { assetUrl } from '../../assets/loader';
 import { myTeamOf, type ScreenProps } from './GameFlow';
 
@@ -21,7 +21,8 @@ export function Build(props: ScreenProps) {
   const arena = view.match ? ARENAS[view.match.arenaId] : null;
   const total = pit ? view.settings.pitstopSeconds : view.settings.buildSeconds;
 
-  const commit = (b: RobotBuild) => { setLocal(b); if (isLeader) client.send({ t: 'setBuild', build: b }); };
+  // 조립 확정은 팀장만: 팀원 화면이 서버 상태와 어긋나지 않게 팀원은 로컬로도 바꾸지 않는다
+  const commit = (b: RobotBuild) => { if (!isLeader) return; setLocal(b); client.send({ t: 'setBuild', build: b }); };
   const setPart = (slot: SlotKey, id: string | null) => {
     const b: RobotBuild = { ...build, utilities: [...build.utilities] };
     if (slot === 'chassis' && id) b.chassis = id; else if (slot === 'drive' && id) b.drive = id; else if (slot === 'front' && id) b.front = id;
@@ -73,14 +74,14 @@ export function Build(props: ScreenProps) {
           {!valid.ok && <div className="tag danger small">{valid.reason}</div>}
           <div className="divider" />
           <span className="small muted">프리셋</span>
-          <div className="col" style={{ gap: 6 }}>{PRESETS.map((p) => <button key={p.id} className="btn small" style={{ justifyContent: 'flex-start' }} onClick={() => commit({ ...p.build, utilities: [...p.build.utilities] })} title={p.short}>{p.name}</button>)}</div>
+          <div className="col" style={{ gap: 6 }}>{PRESETS.map((p) => <button key={p.id} className="btn small" style={{ justifyContent: 'flex-start' }} disabled={!isLeader} onClick={() => commit({ ...p.build, utilities: [...p.build.utilities] })} title={p.short}>{p.name}</button>)}</div>
         </div>
         {/* 중: 조립대 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, position: 'relative' }}>
           <div style={{ width: 'min(46vh, 380px)', height: 'min(46vh, 380px)', borderRadius: '50%', background: 'radial-gradient(circle, rgba(47,215,200,0.18), rgba(10,18,34,0.6) 70%)', boxShadow: '0 0 0 4px rgba(47,215,200,0.25), 0 20px 50px rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RobotPreview build={build} styleIndex={team.styleIndex} number={team.styleIndex + 1} size={Math.min(window.innerHeight * 0.44, 360)} />
           </div>
-          {!isLeader && <div className="panel tight small" style={{ textAlign: 'center' }}>팀장 <strong>{team.leaderNick}</strong>이(가) 조립 중이에요. 부품을 눌러 <strong>추천</strong>할 수 있어요.</div>}
+          {!isLeader && <div className="panel tight small" style={{ textAlign: 'center' }}>팀장 <strong>{team.leaderNick}</strong>{josa(team.leaderNick, '이', '가').slice(team.leaderNick.length)} 조립 중이에요. 부품을 눌러 <strong>추천</strong>할 수 있어요.</div>}
           {isLeader && team.suggestions && team.suggestions.length > 0 && (
             <div className="panel tight row small"><span className="muted">팀원 추천:</span>{team.suggestions.map((s, i) => { const who = team.members.find((m) => m.id === s.by)?.nick ?? '?'; const p = ALL_PARTS[s.partId]; return p ? <button key={i} className="tag" onClick={() => { const slot: SlotKey = p.kind === 'chassis' ? 'chassis' : p.kind === 'drive' ? 'drive' : p.kind === 'front' ? 'front' : (build.utilities.length < 2 && !build.utilities.includes(p.id) ? (build.utilities.length === 0 ? 'utilA' : 'utilB') : 'utilA'); setPart(slot, p.id); }}>{who}: {p.name} ➕</button> : null; })}</div>
           )}
@@ -97,7 +98,7 @@ export function Build(props: ScreenProps) {
           {arena && <div className="col" style={{ gap: 2 }}><strong>{pit ? '다음' : '이번'} 경기장: {arena.name}</strong><span className="small muted">{arena.subtitle}</span><span className="small muted">낙하 구역 {arena.pits.length}곳{arena.conveyors.length ? ` · 컨베이어 ${arena.conveyors.length}` : ''}{arena.slick.length ? ` · 미끄럼 바닥 ${arena.slick.length}` : ''}</span></div>}
           <div className="divider" />
           <strong>규칙 한눈에</strong>
-          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}><li>전투 끝에 <b>왕관 곁(노란 원)</b>에 혼자 있으면 <b style={{ color: 'var(--amber)' }}>3점</b></li><li>왕관은 부딪히면 튕겨 나간다. 밀고, 쏘고, 자석으로 끌어라</li><li>여러 대가 연달아 부딪히면 <b>연쇄</b>로 더 세게 튕긴다</li><li>상대를 낙하 구역에 밀어 넣으면 <b style={{ color: 'var(--amber)' }}>2점</b></li><li>고철 캡슐 줍기 <b style={{ color: 'var(--amber)' }}>1점</b></li><li>떨어져도 다음 턴에 복귀. 탈락 없음</li></ul>
+          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}><li>전투가 끝날 때 <b>왕관 곁(노란 원)</b>에 혼자 있으면 <b style={{ color: 'var(--amber)' }}>3점</b></li><li>왕관은 부딪히면 튕겨 나가요. 밀고, 쏘고, 자석으로 끌어 보세요</li><li>여러 대가 연달아 부딪히면 <b>연쇄</b>로 더 세게 튕겨요</li><li>상대를 낙하 구역에 밀어 넣으면 <b style={{ color: 'var(--amber)' }}>2점</b></li><li>고철 캡슐을 주우면 <b style={{ color: 'var(--amber)' }}>1점</b></li><li>떨어져도 다음 턴에 돌아와요. 탈락은 없어요</li></ul>
           <div className="divider" />
           <div className="small muted">팀원: {team.members.map((m) => m.nick).join(', ') || '없음'}</div>
           <div style={{ marginTop: 'auto' }}>
@@ -112,7 +113,7 @@ export function Build(props: ScreenProps) {
         <div className="overlay" onClick={() => setMarket(null)}>
           <div className="scene" style={{ width: 'min(1100px, 100%)', height: 'min(640px, 100%)', borderRadius: 16, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
             <Scene bg="BG-03">
-              <TopBar title={`고철 경매장 · ${SLOT_LABEL[market]} 고르기`}>{(market === 'utilA' || market === 'utilB') && slotValue(market) && <button className="btn small ghost" onClick={() => setPart(market, null)}>비우기</button>}<button className="btn small ghost" onClick={() => setMarket(null)}>닫기 ✕</button></TopBar>
+              <TopBar title={`고철 경매장 · ${SLOT_LABEL[market]} 고르기`}>{isLeader && (market === 'utilA' || market === 'utilB') && slotValue(market) && <button className="btn small ghost" onClick={() => setPart(market, null)}>비우기</button>}<button className="btn small ghost" onClick={() => setMarket(null)}>닫기 ✕</button></TopBar>
               <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 20px 40px' }}>
                 <div className="row" style={{ gap: 14, justifyContent: 'center', alignItems: 'stretch' }}>
                   {Object.values(KIND_OF[market] === 'chassis' ? CHASSIS : KIND_OF[market] === 'drive' ? DRIVES : KIND_OF[market] === 'front' ? FRONTS : UTILITIES).map((p) => {
@@ -121,7 +122,7 @@ export function Build(props: ScreenProps) {
                     const trial: RobotBuild = { ...build, utilities: [...build.utilities] };
                     if (market === 'chassis') trial.chassis = p.id; else if (market === 'drive') trial.drive = p.id; else if (market === 'front') trial.front = p.id; else { const i = market === 'utilA' ? 0 : 1; trial.utilities[i] = p.id; }
                     const over = buildMass(trial) > MASS_BUDGET;
-                    return <div key={p.id} style={{ width: 190 }}><PartCard id={p.id} selected={current} disabled={otherUtil} note={over ? '무게 초과' : undefined} onClick={() => { if (isLeader) setPart(market, p.id); else { client.send({ t: 'suggestPart', partId: p.id }); client.toast(`${p.name} 추천했어요`); setMarket(null); } }} /><div className="small muted" style={{ textAlign: 'center', marginTop: 4 }}>{p.short}</div></div>;
+                    return <div key={p.id} style={{ width: 190 }}><PartCard id={p.id} selected={current} disabled={otherUtil} note={over ? '무게 초과' : undefined} onClick={() => { if (isLeader) setPart(market, p.id); else { client.send({ t: 'suggestPart', partId: p.id }); client.toast(`${josa(p.name, '을', '를')} 팀장에게 추천했어요`); setMarket(null); } }} /><div className="small muted" style={{ textAlign: 'center', marginTop: 4 }}>{p.short}</div></div>;
                   })}
                 </div>
               </div>

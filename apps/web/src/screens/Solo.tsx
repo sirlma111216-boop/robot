@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Scene, TopBar } from '../ui/common';
 import { navigate } from '../App';
 import { GameFlow } from './game/GameFlow';
@@ -16,7 +16,9 @@ export function Solo() {
     try { localStorage.setItem('sc:soloNick', nick); } catch { /* noop */ }
     setClient(new GameClient(new LocalTransport({ nick: nick || '나', bots, botLevel: level, matches, planSeconds: 30, buildSeconds: 120 })));
   };
-  const flow = useMemo(() => client ? <GameFlow client={client} mode="solo" onExit={() => { client.destroy(); setClient(null); }} /> : null, [client]);
+  // 화면을 떠나면(뒤로가기 포함) 브라우저 안 경기를 멈춘다
+  useEffect(() => () => { client?.destroy(); }, [client]);
+  const flow = useMemo(() => client ? <GameFlow client={client} mode="solo" onExit={() => setClient(null)} /> : null, [client]);
   if (flow) return flow;
   return (
     <Scene bg="BG-04" dim>

@@ -1,5 +1,6 @@
 import { CHASSIS, DRIVES, FRONTS, UTILITIES, type RobotBuild } from '../content/parts';
 import { SLOT_COUNT } from '../content/rules';
+import { josa } from '../text';
 
 export type CommandId = 'FWD' | 'BACK' | 'LEFT' | 'RIGHT' | 'BRAKE' | 'FRONT' | 'UTIL_A' | 'UTIL_B' | 'WAIT';
 export type Plan = CommandId[]; // 길이 SLOT_COUNT
@@ -21,7 +22,7 @@ export const COMMAND_CARDS: Record<CommandId, CommandCard> = {
 };
 
 /** 빌드 기준 명령 비용. 사용할 수 없는 카드는 null (이유 포함) */
-export function commandCost(cmd: CommandId, build: RobotBuild): { cost: number } | { cost: null; reason: string } {
+export function commandCost(cmd: CommandId, build: RobotBuild): { cost: number } | { cost: null; reason: string; passive?: boolean } {
   const card = COMMAND_CARDS[cmd];
   if (cmd === 'FRONT') {
     const f = FRONTS[build.front];
@@ -31,7 +32,7 @@ export function commandCost(cmd: CommandId, build: RobotBuild): { cost: number }
   if (cmd === 'UTIL_A' || cmd === 'UTIL_B') {
     const u = UTILITIES[build.utilities[cmd === 'UTIL_A' ? 0 : 1] ?? ''];
     if (!u) return { cost: null, reason: cmd === 'UTIL_A' ? '보조 장치 1이 없어요' : '보조 장치 2가 없어요' };
-    if (u.activeCost === null) return { cost: null, reason: `${u.name}은(는) 상시 작동이라 카드가 필요 없어요` };
+    if (u.activeCost === null) return { cost: null, passive: true, reason: `${josa(u.name, '은', '는')} 항상 작동해서 카드가 필요 없어요` };
     return { cost: u.activeCost };
   }
   return { cost: card.baseCost };

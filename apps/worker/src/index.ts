@@ -1,6 +1,6 @@
 // Worker 진입점: 정적 자산 + /api HTTP + /ws WebSocket 업그레이드(→ ClassSessionDO)
 import { ClassSessionDO, type Env } from './ClassSessionDO';
-import { signTeacherToken, verifyTeacherToken, readCookie, cookieHeader, timingSafeEqual, TEACHER_COOKIE, TEACHER_TTL_MS } from './auth';
+import { signTeacherToken, verifyTeacherToken, readCookie, cookieHeader, safeEqual, TEACHER_COOKIE, TEACHER_TTL_MS } from './auth';
 
 export { ClassSessionDO };
 
@@ -37,6 +37,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const secure = url.protocol === 'https:';
+    // 배포 주소에서는 항상 HTTPS 로 (비밀번호·쿠키가 평문으로 오가지 않게)
+    if (!secure && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') { url.protocol = 'https:'; return Response.redirect(url.toString(), 301); }
 
     if (path.startsWith('/api/') || path.startsWith('/ws/')) {
       if (request.method !== 'GET' && !sameOrigin(request)) return json({ ok: false, error: '허용되지 않은 출처예요.' }, 403);
@@ -47,10 +49,10 @@ export default {
         const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
         const f = failedLogins.get(ip);
         const now = Date.now();
-        if (f && now - f.at < 60_000 && f.n >= 8) return json({ ok: false, error: '시도가 너무 많아요. 1분 뒤 다시 해요.' }, 429);
+        if (f && now - f.at < 60_000 && f.n >= 15) return json({ ok: false, error: '시도가 너무 많아요. 1분 뒤 다시 해요.' }, 429);
         const body = await request.json<{ id?: string; password?: string }>().catch(() => ({} as { id?: string; password?: string }));
         const okId = (body.id ?? '') === TEACHER_ID;
-        const okPw = typeof body.password === 'string' && timingSafeEqual(body.password, env.TEACHER_PASSWORD);
+        const okPw = typeof body.password === 'string' && (await safeEqual(body.password, env.TEACHER_PASSWORD));
         if (!okId || !okPw) {
           if (failedLogins.size > 500) failedLogins.clear();
           failedLogins.set(ip, { n: (f && now - f.at < 60_000 ? f.n : 0) + 1, at: now });
@@ -76,6 +78,8 @@ export default {
         const kind = m[1], code = m[2].toUpperCase(), sub = m[3] ?? '';
         const stub = classStub(env, code);
         if (kind === 'ws') {
+          // 교차 사이트 WebSocket 탈취 방지: 다른 사이트에서 연 연결은 거부(교사 쿠키는 GET 업그레이드에도 실린다)
+          if (!sameOrigin(request)) return json({ ok: false, error: '허용되지 않은 출처예요.' }, 403);
           // 학생 토큰이 있으면 학생으로 취급(교사가 같은 브라우저로 학생 화면을 열어도 안전)
           const teacher = !url.searchParams.get('token') && (await isTeacher(request, env));
           const headers = new Headers(request.headers);

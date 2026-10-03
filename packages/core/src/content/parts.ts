@@ -79,9 +79,9 @@ export const DRIVES: Record<string, DriveDef> = {
 };
 
 export const FRONTS: Record<string, FrontDef> = {
-  'MD-01': { id: 'MD-01', kind: 'front', name: '용수철 범퍼', short: '가동 중 정면 충돌 시 상대를 강하게 튕긴다. 반동 있음.', mass: 12, activeCost: 3, power: 1.0, gauges: [['타격', 5], ['반동', 3], ['무게', 2]] },
+  'MD-01': { id: 'MD-01', kind: 'front', name: '용수철 범퍼', short: '가동 중 정면으로 부딪히면 상대(왕관 포함)를 강하게 튕긴다. 반동 있음.', mass: 12, activeCost: 3, power: 1.0, gauges: [['타격', 5], ['반동', 3], ['무게', 2]] },
   'MD-02': { id: 'MD-02', kind: 'front', name: '쐐기 플라우', short: '정면 밀기가 강하고 덜 밀린다. 가동하면 돌진.', mass: 16, activeCost: 2, power: 1.0, gauges: [['밀기', 4], ['방어', 4], ['무게', 3]] },
-  'MD-03': { id: 'MD-03', kind: 'front', name: '전자석', short: '가동 중 앞쪽 로봇·캡슐을 끌어당긴다. 나도 끌려간다.', mass: 14, activeCost: 3, power: 1.0, gauges: [['인력', 5], ['사거리', 4], ['무게', 3]] },
+  'MD-03': { id: 'MD-03', kind: 'front', name: '전자석', short: '가동 중 앞쪽 로봇·캡슐·왕관을 끌어당긴다. 나도 끌려간다.', mass: 14, activeCost: 3, power: 1.0, gauges: [['인력', 5], ['사거리', 4], ['무게', 3]] },
 };
 
 export const UTILITIES: Record<string, UtilityDef> = {
@@ -91,7 +91,9 @@ export const UTILITIES: Record<string, UtilityDef> = {
   'MD-07': { id: 'MD-07', kind: 'utility', name: '보강판', short: '상시: 무게가 늘고 충격을 덜 받는다.', mass: 14, activeCost: null, effect: 'armor', power: 1.0, gauges: [['방어', 4], ['무게', 3]] },
 };
 
-export const ALL_PARTS: Record<string, PartDef> = { ...CHASSIS, ...DRIVES, ...FRONTS, ...UTILITIES };
+// 프로토타입 없는 객체로 만든다: 'toString' 같은 키로 조회해도 undefined 가 되어 검증을 통과하지 못한다
+for (const t of [CHASSIS, DRIVES, FRONTS, UTILITIES]) Object.setPrototypeOf(t, null);
+export const ALL_PARTS: Record<string, PartDef> = Object.assign(Object.create(null), CHASSIS, DRIVES, FRONTS, UTILITIES);
 
 /** 유효 조합의 공통 질량 예산 (섀시+주행+전면+보조 합) */
 export const MASS_BUDGET = 190;

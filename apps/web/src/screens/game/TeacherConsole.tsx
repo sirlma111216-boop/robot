@@ -72,11 +72,13 @@ export function TeacherConsole({ client, view, drawer, onClose, onExit }: Screen
             <TeamBadge styleIndex={t.styleIndex} />
             <div className="col" style={{ flex: 1, gap: 4 }}>
               <div className="row"><strong>{t.name}</strong>{t.bot && <span className="tag">봇 · {lvl(t.bot.level)}</span>}<span className="small muted">팀장: {t.leaderNick}</span>{view.match && <span className="tag warn">{t.matchScore}점 · {t.rankPoints}pt</span>}{view.phase === 'PLAN' && <span className={`tag ${t.planLocked ? 'ok' : ''}`}>{t.planLocked ? '확정' : '계획 중'}</span>}{(view.phase === 'BUILD' || view.phase === 'PITSTOP') && <span className={`tag ${t.buildReady ? 'ok' : ''}`}>{t.buildReady ? '준비' : '조립 중'}</span>}</div>
-              <div className="members">{t.members.map((m) => <span key={m.id} className={`member ${m.id === t.leaderId ? 'leader' : ''} ${m.connected ? '' : 'off'}`}>{m.id === t.leaderId ? '★ ' : ''}{m.nick}{m.id !== t.leaderId && m.id !== view.teacherId && <button className="btn small ghost" style={{ minHeight: 22, padding: '0 6px', fontSize: 11 }} title="팀장으로" onClick={() => send({ t: 'teacher:assignLeader', playerId: m.id, teamId: t.id })}>★</button>}</span>)}</div>
+              <div className="members">{t.members.map((m) => <span key={m.id} className={`member ${m.id === t.leaderId ? 'leader' : ''} ${m.connected ? '' : 'off'}`}>{m.id === t.leaderId ? '★ ' : ''}{m.nick}{m.id !== t.leaderId && m.id !== view.teacherId && <button className="btn small ghost" style={{ minHeight: 22, padding: '0 6px', fontSize: 11 }} title="팀장으로" aria-label={`${m.nick} 팀장으로 지정`} onClick={() => send({ t: 'teacher:assignLeader', playerId: m.id, teamId: t.id })}>★</button>}</span>)}</div>
             </div>
             <div className="col" style={{ gap: 4 }}>
               {!t.bot && (myTeam?.id === t.id ? <button className="btn small ghost" onClick={() => send({ t: 'teacher:leaveLeader' })}>참가 그만두기</button> : <button className="btn small ghost" onClick={() => send({ t: 'teacher:joinAsLeader', teamId: t.id })} title="이 팀의 팀장으로 함께 참가">🎮 팀장으로 참가</button>)}
-              {inLobby && <button className="btn small danger" onClick={() => send({ t: 'teacher:removeTeam', teamId: t.id })}>팀 삭제</button>}
+              {inLobby && (confirm === 'del:' + t.id
+                ? <><button className="btn small danger" onClick={() => { send({ t: 'teacher:removeTeam', teamId: t.id }); setConfirm(null); }}>정말 삭제</button><button className="btn small ghost" onClick={() => setConfirm(null)}>취소</button></>
+                : <button className="btn small danger" onClick={() => setConfirm('del:' + t.id)}>팀 삭제</button>)}
             </div>
           </div>
         ))}
@@ -92,7 +94,7 @@ export function TeacherConsole({ client, view, drawer, onClose, onExit }: Screen
                 {s.nick}{t ? ` · ${t.name}` : ''}
                 {!t && inLobby && <button className="btn small primary" style={{ minHeight: 24, padding: '0 8px', fontSize: 12 }} onClick={() => send({ t: 'teacher:assignLeader', playerId: s.id })} disabled={view.teams.length >= MAX_TEAMS}>팀장 지정</button>}
                 {!t && view.teams.filter((x) => !x.bot).length > 0 && <select className="input" style={{ minHeight: 24, width: 96, padding: '0 6px', fontSize: 12 }} value="" onChange={(e) => e.target.value && send({ t: 'teacher:movePlayer', playerId: s.id, teamId: e.target.value })}><option value="">팀 배정…</option>{view.teams.filter((x) => !x.bot).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>}
-                <button className="btn small ghost" style={{ minHeight: 22, padding: '0 6px', fontSize: 11 }} title="내보내기" onClick={() => setConfirm('kick:' + s.id)}>✕</button>
+                <button className="btn small ghost" style={{ minHeight: 22, padding: '0 6px', fontSize: 11 }} title="내보내기" aria-label={`${s.nick} 내보내기`} onClick={() => setConfirm('kick:' + s.id)}>✕</button>
                 {confirm === 'kick:' + s.id && <><button className="btn small danger" style={{ minHeight: 22, fontSize: 11 }} onClick={() => { send({ t: 'teacher:kick', playerId: s.id }); setConfirm(null); }}>내보내기</button><button className="btn small ghost" style={{ minHeight: 22, fontSize: 11 }} onClick={() => setConfirm(null)}>취소</button></>}
               </span>
             );

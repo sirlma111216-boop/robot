@@ -40,7 +40,7 @@ export function Podium({ client, view, mode, onExit }: ScreenProps) {
               ); })}
             </tbody>
           </table>
-          <div className="small muted">점수 근거: 왕관 곁 단독 3 · 낙하 기여 2 · 캡슐 1. 순위 포인트는 인원별 표(6팀: 7·5·4·3·2·1)로 합산.</div>
+          <div className="small muted">점수 근거: 왕관 곁 단독 3점 · 낙하 기여 2점 · 캡슐 1점. 경기마다 순위에 따라 포인트(pt)를 받고 합산해요(6팀이면 1위부터 7·5·4·3·2·1pt).</div>
           {mode === 'student' && <span className="small muted">선생님이 다시 시작하면 격납고로 돌아가요.</span>}
         </div>
         <Speaker who="라이벌 렉스" image="CH-03" text={winner && winner.id === myTeamId ? '…인정. 다음엔 내가 이긴다.' : '역시 왕관은 아무나 못 쓰지. 다시 도전해 봐!'} style={{ left: 16, bottom: 12 }} />

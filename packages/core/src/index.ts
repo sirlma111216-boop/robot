@@ -1,3 +1,4 @@
+export * from './text';
 export * from './content/parts';
 export * from './content/arenas';
 export * from './content/teams';

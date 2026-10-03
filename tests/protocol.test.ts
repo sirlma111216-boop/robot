@@ -25,7 +25,18 @@ describe('프로토콜/규칙 검증', () => {
     expect(validatePlan(['FRONT', 'FRONT', 'FRONT'], b, 5).ok).toBe(false);
     expect(validatePlan(['FRONT', 'UTIL_A', 'FWD'], b, 9).ok).toBe(true);
     const passive = { ...b, utilities: ['MD-06'] };
-    const r = commandCost('UTIL_A', passive); expect(r.cost).toBeNull(); if (r.cost === null) expect(r.reason).toMatch(/상시/);
+    const r = commandCost('UTIL_A', passive); expect(r.cost).toBeNull(); if (r.cost === null) expect(r.reason).toMatch(/항상 작동/);
+  });
+  it('프로토타입 키(toString 등)로는 조립 검증을 통과할 수 없다', () => {
+    for (const k of ['toString', 'valueOf', 'constructor', '__proto__']) {
+      expect(validateBuild({ chassis: k, drive: 'DR-01', front: 'MD-01', utilities: [] }).ok).toBe(false);
+      expect(validateBuild({ chassis: 'RB-02', drive: 'DR-01', front: 'MD-01', utilities: [k] }).ok).toBe(false);
+    }
+  });
+  it('보이지 않는 문자·방향 제어 문자 닉네임 거부', () => {
+    expect(nicknameSchema.safeParse('선생\u200b님').success).toBe(false);
+    expect(nicknameSchema.safeParse('\u202e님생선').success).toBe(false);
+    expect(nicknameSchema.safeParse('민지 2').success).toBe(true);
   });
   it('프리셋 3종은 모두 유효한 빌드', () => {
     for (const p of PRESETS) expect(validateBuild(p.build).ok).toBe(true);

@@ -20,7 +20,7 @@ export function Battle({ client, state, view }: ScreenProps) {
   useEffect(() => {
     if (!team) return;
     if (team.planSource === 'safe') client.toast('명령을 확정하지 않아 이번 턴은 제동으로 진행했어요. 다음 턴엔 3칸을 채워요!', 'error');
-    else if (team.planSource === 'leader') client.toast('확정 전에 마감돼서 마지막 배치로 진행했어요');
+    else if (team.planSource === 'leader') client.toast('확정 전에 마감돼서 팀장이 마지막으로 놓은 명령으로 진행했어요');
     else if (team.planSource === 'vote') client.toast('팀장이 확정하지 않아 팀원 최다 득표 제안으로 진행했어요');
   }, [m.segmentId]);
 

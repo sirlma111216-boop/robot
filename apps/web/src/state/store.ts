@@ -23,6 +23,7 @@ export class GameClient {
   private offsets: number[] = [];
   private toastId = 1;
   private unsub: (() => void) | null = null;
+  private requested = new Set<string>(); // 이미 요청한 재생 자료
 
   constructor(public transport: Transport) {
     this.unsub = transport.subscribe((m) => this.onMessage(m));
@@ -48,7 +49,8 @@ export class GameClient {
         // 서버 시각 보정(퐁이 없을 때의 대략치)
         if (this.offsets.length === 0) this.set({ clockOffset: view.serverNow - Date.now() });
         this.set({ view, lastPhaseVersion: view.phaseVersion });
-        if (view.match?.segmentId && !this.state.segments[view.match.segmentId]) this.transport.send({ t: 'getSegment', segmentId: view.match.segmentId });
+        const sid = view.match?.segmentId;
+        if (sid && !this.state.segments[sid] && !this.requested.has(sid)) { this.requested.add(sid); this.transport.send({ t: 'getSegment', segmentId: sid }); }
         break;
       }
       case 'segment': {
@@ -69,9 +71,15 @@ export class GameClient {
         break;
       }
       case 'error': this.toast(m.error, 'error'); break;
-      case 'emote': this.toast(`${m.from}: ${m.emote}`, 'emote'); break;
+      case 'emote': if (this.state.view?.me?.teamId === m.teamId) this.toast(`${m.from}: ${m.emote}`, 'emote'); break; // 우리 팀 이모트만
       case 'kicked': this.set({ kicked: true, connected: false }); break;
-      case 'conn': this.set({ connected: m.connected }); if (!m.connected && !this.state.kicked && this.state.view) this.toast('연결이 끊겼어요. 다시 연결 중…', 'error'); break;
+      case 'conn': {
+        const was = this.state.connected;
+        this.set({ connected: m.connected });
+        if (m.connected) this.requested.clear();
+        else if (was && !this.state.kicked && this.state.view) this.toast('연결이 끊겼어요. 다시 연결하는 중이에요…', 'error'); // 끊긴 순간 한 번만
+        break;
+      }
     }
   }
   destroy() { this.unsub?.(); this.transport.close(); }
